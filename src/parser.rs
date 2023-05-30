@@ -1,4 +1,4 @@
-use std::{rc::Rc, io::{Result, Error, ErrorKind}};
+use std::{rc::{Rc, Weak}, io::{Result, Error, ErrorKind}};
 use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
 use crate::defs::*;
 
@@ -21,8 +21,9 @@ pub struct DefaultData;
 
 pub struct Parser {
     item_class: ItemClass,
-    defaults: DefaultData,
+    defaults: Rc<DefaultData>,
     key_type: KeyType,
+    skip_cols: Vec<usize>
 }
 
 impl CodeGenerator for Parser {
@@ -81,8 +82,9 @@ impl Parser {
     pub fn new() -> Self {
         Parser { 
             item_class: ItemClass::default(),
-            defaults: DefaultData::default(),
+            defaults: Rc::from(DefaultData::default()),
             key_type: KeyType::None,
+            skip_cols: Vec::default()
         }
     }
 
@@ -132,25 +134,26 @@ impl Parser {
             }
         }
 
-        // collect (comment, identify, type) in row (1, 3, 4)
-        match self.key_type {
-            KeyType::DefKey(_) | KeyType::OriginalTemplateId => {
-                for col in (0..table.width()).filter(|x| *x != DATA_TEMPLATE_ID_POS.0) {
-                    if let (Some(c1), Some(c2), Some(c3)) = 
-                        (table.cell(col, DATA_COMMENT_ROW), table.cell(col, DATA_IDENTIFY_ROW), table.cell(col, DATA_TYPE_ROW)) {
-                        self.item_class.items.push(( Some(c1.clone()), Some(c2.clone()), Some(convert_type(c3.clone())) ));
-                    }
-                }
-            },
-            _ => {
-                for col in 0..table.width() {
-                    if let (Some(c1), Some(c2), Some(c3)) = 
-                        (table.cell(col, DATA_COMMENT_ROW), table.cell(col, DATA_IDENTIFY_ROW), table.cell(col, DATA_TYPE_ROW)) {
-                        self.item_class.items.push(( Some(c1.clone()), Some(c2.clone()), Some(convert_type(c3.clone())) ));
-                    }
+        // collect skip_cols
+        for col in 0..table.width() {
+            if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
+                if v.starts_with("#") {
+                    self.skip_cols.push(col);
                 }
             }
-        };
+        }
+
+        // collect (comment, identify, type) in row (1, 3, 4)
+        for col in (0..table.width()).filter(|x| !self.skip_cols.contains(x)) {
+            if let (Some(c1), Some(c2), Some(c3)) = 
+                (table.cell(col, DATA_COMMENT_ROW), table.cell(col, DATA_IDENTIFY_ROW), table.cell(col, DATA_TYPE_ROW)) {
+                self.item_class.items.push(( Some(c1.clone()), Some(c2.clone()), Some(convert_type(c3.clone())) ));
+            }
+        }
+
+        // collect defaults
+
+        self.item_class.defaults = Some(Rc::downgrade(&self.defaults));
 
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = self.key_type {
@@ -159,8 +162,6 @@ impl Parser {
                     vec.push(Some(v.clone()));
                 }
             }
-
-            println!("{:?}", vec);
         }
 
     }

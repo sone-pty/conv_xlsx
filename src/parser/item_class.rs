@@ -1,15 +1,16 @@
 use crate::defs::ItemStr;
 use super::{CodeGenerator, DefaultData};
+use std::rc::Weak;
 
 pub struct ItemClass {
     pub name: String,
     pub items: Vec<(ItemStr, ItemStr, ItemStr)>, // (comment, identify, type)
-    //pub defaults: &'a DefaultData
+    pub defaults: Option<Weak<DefaultData>>
 }
 
 impl Default for ItemClass {
     fn default() -> Self {
-        ItemClass { name: String::default(), items: Vec::default() }
+        ItemClass { name: String::default(), items: Vec::default(), defaults: None }
     }
 }
 

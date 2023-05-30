@@ -14,3 +14,5 @@ pub const DATA_TYPE_ROW: usize = 4;
 pub const DATA_TEMPLATE_ID_POS: (usize, usize) = (1, 3);
 
 pub type ItemStr = Option<Rc<String>>;
+
+pub const OUTPUT_PATH: &'static str = "output";

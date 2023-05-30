@@ -3,7 +3,10 @@
 mod parser;
 mod defs;
 
-use crate::parser::Parser;
+use std::{path::PathBuf, io::Write};
+use std::fs::File;
+
+use crate::{parser::Parser, defs::OUTPUT_PATH};
 
 fn main() {
     let mut parser = Parser::new();
@@ -14,6 +17,11 @@ fn main() {
     } else if let Err(e) = ret {
         println!("{}", e);
     }
+    
+    let code = parser.generate("\r\n");
 
-    println!("{}", parser.generate("\r\n"));
+    let mut path = PathBuf::from(OUTPUT_PATH);
+    path.push("Animal.cs");
+    let mut file = File::create(path.as_path()).unwrap();
+    file.write_all(code.as_bytes()).unwrap();
 }
