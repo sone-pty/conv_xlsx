@@ -1,23 +1,22 @@
 #![feature(string_remove_matches)]
 
-mod parser;
 mod defs;
+mod parser;
 
-use std::{path::PathBuf, io::Write};
 use std::fs::File;
+use std::{io::Write, path::PathBuf};
 
-use crate::{parser::Parser, defs::OUTPUT_PATH};
+use crate::{defs::OUTPUT_PATH, parser::Parser};
 
 fn main() {
     let mut parser = Parser::new();
     let ret = parser.read_file("Animal.xlsx");
-    
-    if let Ok(_) =  ret {
 
+    if let Ok(_) = ret {
     } else if let Err(e) = ret {
         println!("{}", e);
     }
-    
+
     let code = parser.generate("\r\n");
 
     let mut path = PathBuf::from(OUTPUT_PATH);

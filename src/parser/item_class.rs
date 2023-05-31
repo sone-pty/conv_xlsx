@@ -1,16 +1,21 @@
-use crate::defs::ItemStr;
 use super::{CodeGenerator, DefaultData};
+use crate::defs::ItemStr;
+use std::cell::RefCell;
 use std::rc::Weak;
 
 pub struct ItemClass {
     pub name: String,
     pub items: Vec<(ItemStr, ItemStr, ItemStr)>, // (comment, identify, type)
-    pub defaults: Option<Weak<DefaultData>>
+    pub defaults: Option<Weak<RefCell<DefaultData>>>,
 }
 
 impl Default for ItemClass {
     fn default() -> Self {
-        ItemClass { name: String::default(), items: Vec::default(), defaults: None }
+        ItemClass {
+            name: String::default(),
+            items: Vec::default(),
+            defaults: None,
+        }
     }
 }
 
@@ -25,7 +30,7 @@ impl CodeGenerator for ItemClass {
                 code.push('\t');
             }
         };
-        
+
         let comment = |content: &str, code: &mut String| {
             format(tab_nums + 1, code);
             code.push_str("/// <summary>");
@@ -90,7 +95,7 @@ impl CodeGenerator for ItemClass {
 
             if let Some(item_identify) = &item.1 {
                 code.push_str(item_identify);
-                code.push(';'); 
+                code.push(';');
                 code.push_str(end);
             }
 
@@ -107,7 +112,7 @@ impl CodeGenerator for ItemClass {
         format(tab_nums + 1, &mut construct_1);
         construct_1.push('{');
         construct_1.push_str(end);
-        
+
         count = 0;
         for item in self.items.iter() {
             if let Some(item_identify) = &item.1 {
