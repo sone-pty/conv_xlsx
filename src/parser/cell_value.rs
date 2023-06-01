@@ -2,18 +2,18 @@ use std::rc::Rc;
 use super::stack::Stack;
 
 pub enum CellValue {
-    DBool(bool),
-    DLString(Rc<String>),
-    DString(Rc<String>),
-    DShort(i16),
-    DUShort(u16),
-    DSByte(i8),
-    DByte(u8),
-    DInt(i32),
-    DUInt(u32),
-    DArray(Vec<CellValue>), // first element of arr is one dumb, start from index 1
-    DList(Vec<CellValue>),  // first element of list is one dumb, start from index 1
-    DNone,
+    DBool(BoolValue),
+    DLString(LStringValue),
+    DString(StringValue),
+    DShort(ShortValue),
+    DUShort(UShortValue),
+    DSByte(SByteValue),
+    DByte(ByteValue),
+    DInt(IntValue),
+    DUInt(UIntValue),
+    DArray(ArrayValue), // first element of arr is one dumb, start from index 1
+    DList(ListValue),  // first element of list is one dumb, start from index 1
+    DNone(NoneValue),
 }
 
 impl CellValue {
@@ -25,55 +25,53 @@ impl CellValue {
         match ty_str {
             "bool" => {
                 if val_str == "0" {
-                    Self::DBool(false)
+                    Self::DBool(BoolValue(false))
                 } else if val_str == "1" {
-                    Self::DBool(true)
+                    Self::DBool(BoolValue(true))
                 } else {
                     todo!()
                 }
             }
             "byte" => {
                 if let Ok(v) = val_str.parse::<u8>() {
-                    Self::DByte(v)
+                    Self::DByte(ByteValue(v))
                 } else {
                     todo!()
                 }
             }
             "sbyte" => {
                 if let Ok(v) = val_str.parse::<i8>() {
-                    Self::DSByte(v)
+                    Self::DSByte(SByteValue(v))
                 } else {
                     todo!()
                 }
             }
-            "LString" => {
-                todo!()
-            }
-            "string" => Self::DString(val.clone()),
+            "LString" => Self::DLString(LStringValue(val.clone())),
+            "string" => Self::DString(StringValue(val.clone())),
             "short" => {
                 if let Ok(v) = val_str.parse::<i16>() {
-                    Self::DShort(v)
+                    Self::DShort(ShortValue(v))
                 } else {
                     todo!()
                 }
             }
             "ushort" => {
                 if let Ok(v) = val_str.parse::<u16>() {
-                    Self::DUShort(v)
+                    Self::DUShort(UShortValue(v))
                 } else {
                     todo!()
                 }
             }
             "int" => {
                 if let Ok(v) = val_str.parse::<i32>() {
-                    Self::DInt(v)
+                    Self::DInt(IntValue(v))
                 } else {
                     todo!()
                 }
             }
             "uint" => {
                 if let Ok(v) = val_str.parse::<u32>() {
-                    Self::DUInt(v)
+                    Self::DUInt(UIntValue(v))
                 } else {
                     todo!()
                 }
@@ -83,7 +81,7 @@ impl CellValue {
                 let mut char_stack: Stack<char> = Stack::new();
                 let mut op_stack: Stack<char> = Stack::new();
                 let mut keyword_stack: Stack<String> = Stack::new();
-                let mut ret = CellValue::DNone;
+                let mut ret = CellValue::DNone(NoneValue);
 
                 let take_keyword = |st: &mut Stack<char>| -> String {
                     let mut s = String::with_capacity(10);
@@ -101,7 +99,7 @@ impl CellValue {
                             if let Ok(key) = keyword_stack.pop() {
                                 if let Ok(top) = op_stack.pop() {
                                     if top == '[' {
-                                        ret = CellValue::DArray(vec![CellValue::basic_default_value(&key)]);
+                                        ret = CellValue::DArray(ArrayValue(vec![CellValue::basic_default_value(&key)]));
                                     }
                                 }
                             }
@@ -111,7 +109,7 @@ impl CellValue {
                                 if let Ok(key) = keyword_stack.pop() {
                                     if let Ok(top) = op_stack.pop() {
                                         if top == '<' && key == "List" {
-                                            ret = CellValue::DList(vec![ret]);
+                                            ret = CellValue::DList(ListValue(vec![ret]));
                                         }
                                     }
                                 }
@@ -119,7 +117,7 @@ impl CellValue {
                                 let _ = op_stack.pop();
                                 let inner_keyword = take_keyword(&mut char_stack);
                                 ret = CellValue::basic_default_value(&inner_keyword);
-                                ret = CellValue::DList(vec![ret]);
+                                ret = CellValue::DList(ListValue(vec![ret]));
                             }
                         }
                         '[' | '<' => {
@@ -133,28 +131,60 @@ impl CellValue {
                 }
                 
                 if op_stack.is_empty() {
-                    ret 
+                    collect_value(val_str, &mut ret);
+                    ret
                 } else {
                     // TODO: err
-                    CellValue::DNone
+                    CellValue::DNone(NoneValue)
                 }
             }
+        }
+    }
+
+    pub fn gen_code(&self) -> String {
+        match self {
+            Self::DBool(v) => { v.value() }
+            Self::DByte(v) => { v.value() }
+            Self::DSByte(v) => { v.value() }
+            Self::DInt(v) => { v.value() }
+            Self::DUInt(v) => { v.value() }
+            Self::DShort(v) => { v.value() }
+            Self::DUShort(v) => { v.value() }
+            Self::DString(v) => { v.value() }
+            Self::DLString(v) => { v.value() }
+            Self::DArray(v) => { v.value() }
+            Self::DList(v) => { v.value() }
+            _ => { String::default() }
+        }
+    }
+    
+    fn get_basic_type_string(&self) -> String {
+        match self {
+            Self::DBool(v) => { v.ty() }
+            Self::DByte(v) => { v.ty() }
+            Self::DSByte(v) => { v.ty() }
+            Self::DInt(v) => { v.ty() }
+            Self::DUInt(v) => { v.ty() }
+            Self::DShort(v) => { v.ty() }
+            Self::DUShort(v) => { v.ty() }
+            Self::DString(v) => { v.ty() }
+            _ => { String::default() }
         }
     }
 
     // not include list and array
     fn basic_default_value(key: &str) -> CellValue {
         match key {
-            "short" => CellValue::DShort(0),
-            "ushort" => CellValue::DUShort(0),
-            "string" => CellValue::DString(Rc::default()),
-            "LString" => CellValue::DLString(Rc::default()),
-            "int" => CellValue::DInt(0),
-            "uint" => CellValue::DUInt(0),
-            "sbyte" => CellValue::DSByte(0),
-            "byte" => CellValue::DByte(0),
-            "bool" => CellValue::DBool(true),
-            _ => CellValue::DNone,
+            "short" => CellValue::DShort(ShortValue(0)),
+            "ushort" => CellValue::DUShort(UShortValue(0)),
+            "string" => CellValue::DString(StringValue(Rc::default())),
+            "LString" => CellValue::DLString(LStringValue(Rc::default())),
+            "int" => CellValue::DInt(IntValue(0)),
+            "uint" => CellValue::DUInt(UIntValue(0)),
+            "sbyte" => CellValue::DSByte(SByteValue(0)),
+            "byte" => CellValue::DByte(ByteValue(0)),
+            "bool" => CellValue::DBool(BoolValue(true)),
+            _ => CellValue::DNone(NoneValue),
         }
     }
 
@@ -162,33 +192,33 @@ impl CellValue {
     fn clone_from_other_with_default(v: &CellValue) -> CellValue {
         match v {
             CellValue::DBool(_) => {
-                CellValue::DBool(true)
+                CellValue::DBool(BoolValue(true))
             },
             CellValue::DByte(_) => {
-                CellValue::DByte(0)
+                CellValue::DByte(ByteValue(0))
             },
             CellValue::DInt(_) => {
-                CellValue::DInt(0)
+                CellValue::DInt(IntValue(0))
             },
             CellValue::DLString(_) => {
-                CellValue::DLString(Rc::default())
+                CellValue::DLString(LStringValue(Rc::default()))
             },
             CellValue::DShort(_) => {
-                CellValue::DShort(0)
+                CellValue::DShort(ShortValue(0))
             },
             CellValue::DSByte(_) => {
-                CellValue::DSByte(0)
+                CellValue::DSByte(SByteValue(0))
             },
             CellValue::DString(_) => {
-                CellValue::DString(Rc::default())
+                CellValue::DString(StringValue(Rc::default()))
             },
             CellValue::DUInt(_) => {
-                CellValue::DUInt(0)
+                CellValue::DUInt(UIntValue(0))
             },
             CellValue::DUShort(_) => {
-                CellValue::DUShort(0)
+                CellValue::DUShort(UShortValue(0))
             },
-            _ => { CellValue::DNone }
+            _ => { CellValue::DNone(NoneValue) }
         }
     }
 }
@@ -229,31 +259,31 @@ fn collect_value(val: &str, dest: &mut CellValue) {
             // match type, assert arr is not empty
             match arr[0] {
                 CellValue::DBool(_) => {
-                    let _ = e.parse::<bool>().map(|v| arr.push(CellValue::DBool(v)));
+                    let _ = e.parse::<bool>().map(|v| arr.push(CellValue::DBool( BoolValue(v) )));
                 },
                 CellValue::DByte(_) => {
-                    let _ = e.parse::<u8>().map(|v| arr.push(CellValue::DByte(v)));
+                    let _ = e.parse::<u8>().map(|v| arr.push(CellValue::DByte( ByteValue(v) )));
                 },
                 CellValue::DInt(_) => {
-                    let _ = e.parse::<i32>().map(|v| arr.push(CellValue::DInt(v)));
+                    let _ = e.parse::<i32>().map(|v| arr.push(CellValue::DInt( IntValue(v) )));
                 },
                 CellValue::DLString(_) => {
                     todo!()
                 },
                 CellValue::DShort(_) => {
-                    let _ = e.parse::<i16>().map(|v| arr.push(CellValue::DShort(v)));
+                    let _ = e.parse::<i16>().map(|v| arr.push(CellValue::DShort( ShortValue(v) )));
                 },
                 CellValue::DSByte(_) => {
-                    let _ = e.parse::<i8>().map(|v| arr.push(CellValue::DSByte(v)));
+                    let _ = e.parse::<i8>().map(|v| arr.push(CellValue::DSByte( SByteValue(v) )));
                 },
                 CellValue::DString(_) => {
-                    arr.push(CellValue::DString(Rc::new(e.to_string())));
+                    arr.push(CellValue::DString( StringValue(Rc::new(e.to_string())) ));
                 },
                 CellValue::DUInt(_) => {
-                    let _ = e.parse::<i16>().map(|v| arr.push(CellValue::DShort(v)));
+                    let _ = e.parse::<u32>().map(|v| arr.push(CellValue::DUInt( UIntValue(v) )));
                 },
                 CellValue::DUShort(_) => {
-                    let _ = e.parse::<i16>().map(|v| arr.push(CellValue::DShort(v)));
+                    let _ = e.parse::<u16>().map(|v| arr.push(CellValue::DUShort( UShortValue(v) )));
                 },
                 _ => { todo!("err") }
             }
@@ -266,39 +296,39 @@ fn collect_value(val: &str, dest: &mut CellValue) {
     match dest {
         CellValue::DArray(arr) => {
             let elements: Vec<&str> = val[1..val.len()-1].split(',').collect();
-            fill_elements(arr, &elements);
+            fill_elements(&mut arr.0, &elements);
         },
         CellValue::DList(list) => {
-            match list[0] {
+            match (list.0)[0] {
                 CellValue::DArray(ref arr) => {
                     while start_idx < val.len() {
                         let end_idx = find_block(&val[start_idx..]) + start_idx;
-                        let mut new_arr = CellValue::DArray(vec![CellValue::clone_from_other_with_default(&arr[0])]);
+                        let mut new_arr = CellValue::DArray(ArrayValue(vec![CellValue::clone_from_other_with_default(&(arr.0)[0])]));
                         collect_value(&val[start_idx..end_idx], &mut new_arr);
                         temp.push(new_arr);
                         start_idx = end_idx + 1;
                     }
 
                     for v in temp {
-                        list.push(v);
+                        list.0.push(v);
                     }
                 },
                 CellValue::DList(ref lst) => {
                     while start_idx < val.len() {
                         let end_idx = find_block(&val[start_idx..]) + start_idx;
-                        let mut new_lst = CellValue::DList(vec![CellValue::clone_from_other_with_default(&lst[0])]);
+                        let mut new_lst = CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]));
                         collect_value(&val[start_idx..end_idx], &mut new_lst);
                         temp.push(new_lst); 
                         start_idx = end_idx + 1;
                     }
 
                     for v in temp {
-                        list.push(v);
+                        list.0.push(v);
                     }
                 },
                 _ => {
                     let elements: Vec<&str> = val[1..val.len()-1].split(',').collect();
-                    fill_elements(list, &elements);
+                    fill_elements(&mut list.0, &elements);
                 }
             }
         },
@@ -306,12 +336,218 @@ fn collect_value(val: &str, dest: &mut CellValue) {
     }
 }
 
-pub trait ValueToString {
+pub trait ValueInfo {
     fn value(&self) -> String;
+    fn ty(&self) -> String;
+}
+pub struct BoolValue(bool);
+pub struct LStringValue(Rc<String>);
+pub struct StringValue(Rc<String>);
+pub struct ShortValue(i16);
+pub struct UShortValue(u16);
+pub struct IntValue(i32);
+pub struct UIntValue(u32);
+pub struct ByteValue(u8);
+pub struct SByteValue(i8);
+pub struct ArrayValue(Vec<CellValue>);
+pub struct ListValue(Vec<CellValue>);
+pub struct NoneValue;
+
+//----------------------------------impl-------------------------------------------
+
+impl ValueInfo for BoolValue {
+    fn value(&self) -> String {
+        if self.0 == false {
+            String::from("false")
+        } else {
+            String::from("true")
+        }
+    }
+
+    fn ty(&self) -> String {
+        String::from("bool")
+    }
 }
 
-impl ValueToString for CellValue {
+impl ValueInfo for LStringValue {
     fn value(&self) -> String {
-        String::default()
+        todo!()
     }
+
+    fn ty(&self) -> String {
+        todo!()
+    }
+}
+
+impl ValueInfo for StringValue {
+    fn value(&self) -> String {
+        let mut ret = String::from('\"');
+        ret.push_str(&self.0);
+        ret.push('\"');
+        ret
+    }
+
+    fn ty(&self) -> String {
+        String::from("string")
+    }
+}
+
+impl ValueInfo for ShortValue {
+    fn value(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn ty(&self) -> String {
+        String::from("short")
+    }
+}
+
+impl ValueInfo for UShortValue {
+    fn value(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn ty(&self) -> String {
+        String::from("ushort")
+    }
+}
+
+impl ValueInfo for IntValue {
+    fn value(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn ty(&self) -> String {
+        String::from("int")
+    }
+}
+
+impl ValueInfo for UIntValue {
+    fn value(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn ty(&self) -> String {
+        String::from("uint")
+    }
+}
+
+impl ValueInfo for ByteValue {
+    fn value(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn ty(&self) -> String {
+        String::from("byte")
+    }
+}
+
+impl ValueInfo for SByteValue {
+    fn value(&self) -> String {
+        self.0.to_string()
+    }
+
+    fn ty(&self) -> String {
+        String::from("sbyte")
+    }
+}
+
+impl ValueInfo for ArrayValue {
+    fn value(&self) -> String {
+        if self.0.is_empty() {
+            String::default()
+        } else {
+            let mut ret = String::from("new ");
+            ret.push_str(&self.ty());
+            ret.push('{');
+
+            for v in self.0.iter().skip(1) {
+                let s = match v {
+                    CellValue::DBool(v) => {v.value()},
+                    CellValue::DByte(v) => {v.value()},
+                    CellValue::DSByte(v) => {v.value()},
+                    CellValue::DInt(v) => {v.value()},
+                    CellValue::DUInt(v) => {v.value()},
+                    CellValue::DString(v) => {v.value()},
+                    CellValue::DShort(v) => {v.value()},
+                    CellValue::DUShort(v) => {v.value()},
+                    _ => {String::default()}
+                };
+                ret.push_str(&s);
+                ret.push(',');
+            }
+            if ret.ends_with(',') {
+                ret.remove(ret.len() - 1);
+            }
+            ret.push('}');
+            ret
+        }
+    }
+
+    fn ty(&self) -> String {
+        let mut ty = (self.0)[0].get_basic_type_string();
+        ty.push_str("[]");
+        ty
+    }
+}
+
+impl ValueInfo for ListValue {
+    fn value(&self) -> String {
+        if self.0.is_empty() {
+            String::default()
+        } else {
+            let mut ret = String::from("new ");
+            ret.push_str(&self.ty());
+            ret.push('{');
+
+            for v in self.0.iter().skip(1) {
+                let s = match v {
+                    CellValue::DBool(v) => {v.value()},
+                    CellValue::DByte(v) => {v.value()},
+                    CellValue::DSByte(v) => {v.value()},
+                    CellValue::DInt(v) => {v.value()},
+                    CellValue::DUInt(v) => {v.value()},
+                    CellValue::DString(v) => {v.value()},
+                    CellValue::DShort(v) => {v.value()},
+                    CellValue::DUShort(v) => {v.value()},
+                    CellValue::DArray(v) => {v.value()},
+                    CellValue::DList(v) => {v.value()}
+                    _ => {String::default()}
+                };
+                ret.push_str(&s);
+                ret.push(',');
+            }
+
+            if ret.ends_with(',') {
+                ret.remove(ret.len() - 1);
+            }
+            ret.push('}');
+            ret
+        }
+    }
+
+    fn ty(&self) -> String {
+        let mut ty = String::default();
+        ty.push_str("List<");
+
+        let first = self.0.first().unwrap();
+        match first {
+            CellValue::DArray(v) => { ty.push_str(&v.ty()); }
+            CellValue::DList(v) => { ty.push_str(&v.ty()); }
+            // basic type
+            _ => {
+                ty.push_str(&first.get_basic_type_string());
+            }
+        }
+        ty.push('>');
+        ty
+    }
+}
+
+#[test]
+fn test_cellvalue() {
+    let ty = Rc::new(String::from("List<string>"));
+    let val = Rc::new(String::from("{1,2,3,4,5}"));
+    let cv = CellValue::new(&val, &ty);
+    println!("{}", cv.gen_code())
 }

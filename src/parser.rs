@@ -8,8 +8,6 @@ use std::{
 use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
 
 use item_class::ItemClass;
-
-use self::cell_value::ValueToString;
 mod item_class;
 
 use cell_value::CellValue;
@@ -27,7 +25,7 @@ enum KeyType {
     OriginalTemplateId,
 }
 
-pub struct DefaultData(HashMap<Rc<String>, Box<dyn ValueToString>>);
+pub struct DefaultData(HashMap<Rc<String>, Box<CellValue>>);
 
 impl Default for DefaultData {
     fn default() -> Self {
@@ -179,8 +177,7 @@ impl Parser {
                 table.cell(col, DATA_TYPE_ROW)
             ) {
                 use std::collections::hash_map::Entry;
-                let key = ident.clone();
-                match self.defaults.borrow_mut().0.entry(key) {
+                match self.defaults.borrow_mut().0.entry(ident.clone()) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
                         e.insert(Box::new(CellValue::new(default, &convert_type(ty.clone()))));

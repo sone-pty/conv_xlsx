@@ -114,23 +114,37 @@ impl CodeGenerator for ItemClass {
         construct_1.push_str(end);
 
         count = 0;
-        for item in self.items.iter() {
-            if let Some(item_identify) = &item.1 {
-                // with args
-                format(tab_nums + 2, &mut construct_0);
-                construct_0.push_str(item_identify);
-                construct_0.push_str(" = arg");
-                construct_0.push_str(&count.to_string());
-                construct_0.push(';');
-                construct_0.push_str(end);
+        if let Some(weak) = &self.defaults {
+            if let Some(up) = weak.upgrade() {
+                let map = &up.borrow().0;
 
-                // default
-                format(tab_nums + 2, &mut construct_1);
-                construct_1.push_str(item_identify);
-                construct_1.push_str(" = default;");
-                construct_1.push_str(end);
+                for item in self.items.iter() {
+                    if let Some(item_identify) = &item.1 {
+                        // with args
+                        format(tab_nums + 2, &mut construct_0);
+                        construct_0.push_str(item_identify);
+                        construct_0.push_str(" = arg");
+                        construct_0.push_str(&count.to_string());
+                        construct_0.push(';');
+                        construct_0.push_str(end);
+
+                        // default
+                        format(tab_nums + 2, &mut construct_1);
+                        construct_1.push_str(item_identify);
+
+                        if map.contains_key(item_identify) {
+                            let val = map.get(item_identify).unwrap();
+                            construct_1.push_str(" = ");
+                            construct_1.push_str(&val.gen_code());
+                            construct_1.push(';');
+                        } else {
+                            construct_1.push_str(" = default;");
+                        }
+                        construct_1.push_str(end);
+                    }
+                    count += 1;
+                }
             }
-            count += 1;
         }
 
         format(tab_nums + 1, &mut construct_0);
