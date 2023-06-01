@@ -36,6 +36,7 @@ impl<T> Stack<T> {
         self.head.is_none()
     }
 
+    #[allow(dead_code)]
     pub fn peek(&self) -> Option<&T> {
         match self.head.as_ref() {
             None => None,
@@ -43,6 +44,7 @@ impl<T> Stack<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn peek_mut(&mut self) -> Option<&mut T> {
         match self.head.as_mut() {
             None => None,
@@ -50,16 +52,19 @@ impl<T> Stack<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_iter_for_stack(self) -> IntoIter<T> {
         IntoIter(self)
     }
 
+    #[allow(dead_code)]
     pub fn iter(&self) -> Iter<'_, T> {
         Iter {
             next: self.head.as_deref(),
         }
     }
 
+    #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         IterMut {
             next: self.head.as_deref_mut(),

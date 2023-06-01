@@ -12,6 +12,7 @@ use item_class::ItemClass;
 use self::cell_value::ValueToString;
 mod item_class;
 
+use cell_value::CellValue;
 mod cell_value;
 mod stack;
 
@@ -172,17 +173,17 @@ impl Parser {
             }
 
             // collect defaults
-            if let (Some(ident), Some(default)) = (
+            if let (Some(ident), Some(default), Some(ty)) = (
                 table.cell(col, DATA_IDENTIFY_ROW),
                 table.cell(col, DATA_DEFAULT_ROW),
+                table.cell(col, DATA_TYPE_ROW)
             ) {
                 use std::collections::hash_map::Entry;
                 let key = ident.clone();
-
                 match self.defaults.borrow_mut().0.entry(key) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
-                        //match
+                        e.insert(Box::new(CellValue::new(default, &convert_type(ty.clone()))));
                     }
                 }
             }
