@@ -1,6 +1,24 @@
 use std::rc::Rc;
 use super::stack::Stack;
 
+macro_rules! get_basic_type_string {
+    ($self:ident, $($enum:ident::$variant:ident),+) => {
+        match $self {
+            $( $enum::$variant(v) => v.ty() ),+,
+            _ => String::default(),
+        }
+    };
+}
+
+macro_rules! gen_code {
+    ($self:ident, $($enum:ident::$variant:ident),+) => {
+        match $self {
+            $( $enum::$variant(v) => v.value() ),+,
+            _ => String::default(),
+        }
+    };
+}
+
 pub enum CellValue {
     DBool(BoolValue),
     DLString(LStringValue),
@@ -142,34 +160,34 @@ impl CellValue {
     }
 
     pub fn gen_code(&self) -> String {
-        match self {
-            Self::DBool(v) => { v.value() }
-            Self::DByte(v) => { v.value() }
-            Self::DSByte(v) => { v.value() }
-            Self::DInt(v) => { v.value() }
-            Self::DUInt(v) => { v.value() }
-            Self::DShort(v) => { v.value() }
-            Self::DUShort(v) => { v.value() }
-            Self::DString(v) => { v.value() }
-            Self::DLString(v) => { v.value() }
-            Self::DArray(v) => { v.value() }
-            Self::DList(v) => { v.value() }
-            _ => { String::default() }
-        }
+        gen_code!(
+            self,
+            CellValue::DBool,
+            CellValue::DByte, 
+            CellValue::DSByte, 
+            CellValue::DInt, 
+            CellValue::DUInt, 
+            CellValue::DShort, 
+            CellValue::DUShort, 
+            CellValue::DString,
+            CellValue::DLString,
+            CellValue::DArray,
+            CellValue::DList
+        )
     }
     
     fn get_basic_type_string(&self) -> String {
-        match self {
-            Self::DBool(v) => { v.ty() }
-            Self::DByte(v) => { v.ty() }
-            Self::DSByte(v) => { v.ty() }
-            Self::DInt(v) => { v.ty() }
-            Self::DUInt(v) => { v.ty() }
-            Self::DShort(v) => { v.ty() }
-            Self::DUShort(v) => { v.ty() }
-            Self::DString(v) => { v.ty() }
-            _ => { String::default() }
-        }
+        get_basic_type_string!(
+            self, 
+            CellValue::DBool, 
+            CellValue::DByte, 
+            CellValue::DSByte, 
+            CellValue::DInt, 
+            CellValue::DUInt, 
+            CellValue::DShort, 
+            CellValue::DUShort, 
+            CellValue::DString
+        )
     }
 
     // not include list and array
@@ -217,6 +235,20 @@ impl CellValue {
             },
             CellValue::DUShort(_) => {
                 CellValue::DUShort(UShortValue(0))
+            },
+            CellValue::DArray(arr) => {
+                if arr.0.is_empty() {
+                    CellValue::DNone(NoneValue)
+                } else {
+                    CellValue::DArray(ArrayValue(vec![CellValue::clone_from_other_with_default(&(arr.0)[0])]))
+                }
+            },
+            CellValue::DList(lst) => {
+                if lst.0.is_empty() {
+                    CellValue::DNone(NoneValue)
+                } else {
+                    CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]))
+                }
             },
             _ => { CellValue::DNone(NoneValue) }
         }
@@ -546,8 +578,8 @@ impl ValueInfo for ListValue {
 
 #[test]
 fn test_cellvalue() {
-    let ty = Rc::new(String::from("List<string>"));
-    let val = Rc::new(String::from("{1,2,3,4,5}"));
+    let ty = Rc::new(String::from("List<List<short[]>>"));
+    let val = Rc::new(String::from("{{{1,2},{3,4},{5}},{{1,2},{3,4},{5}}}"));
     let cv = CellValue::new(&val, &ty);
     println!("{}", cv.gen_code())
 }
