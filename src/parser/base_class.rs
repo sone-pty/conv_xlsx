@@ -1,3 +1,5 @@
+use crate::defs::DEFAULT_LINES;
+
 use super::{CodeGenerator, DefaultData, VarData};
 use std::rc::Weak;
 use std::cell::RefCell;
@@ -5,7 +7,8 @@ use std::cell::RefCell;
 pub struct BaseClass {
     pub name: String,
     pub defaults: Option<Weak<RefCell<DefaultData>>>,
-    pub vals: Option<Weak<RefCell<VarData>>>
+    pub vals: Option<Weak<RefCell<VarData>>>,
+    pub lines: usize
 }
 
 impl Default for BaseClass {
@@ -13,7 +16,8 @@ impl Default for BaseClass {
         BaseClass {
             name: String::default(),
             defaults: None,
-            vals: None
+            vals: None,
+            lines: 0
         }
     }
 }
@@ -65,9 +69,19 @@ impl CodeGenerator for BaseClass {
                 code.push_str("Item> _dataArray = null;");
                 code.push_str(end);
                 //--------------fixed code----------------------------
-
+                
                 //TODO: DefKey static class
 
+                for term in 0..(self.lines / DEFAULT_LINES)+1 {
+                    code.push_str(end);
+                    format(tab_nums + 1, &mut code);
+                    code.push_str("private void CreateItems");
+                    code.push_str(&term.to_string());
+                    code.push_str("()");
+                    code.push_str(end);
+                    format(tab_nums + 1, &mut code);
+                    code.push('{');
+                }
 
                 format(tab_nums, &mut code);
                 code.push('}');

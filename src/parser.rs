@@ -217,6 +217,7 @@ impl Parser {
                             Entry::Vacant(_) => {}
                         }
                     } else {
+                        // empty cell
                         match self.vals.borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
                                 e.get_mut().push(Box::new(CellValue::new(&Rc::new(String::default()), &ty)));
@@ -228,8 +229,11 @@ impl Parser {
             }
         }
 
+        // item_class
         self.item_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.item_class.vals = Some(Rc::downgrade(&self.vals));
+        // base_class
+        self.base_class.lines = height - DATA_START_ROW - 1;
         self.base_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.base_class.vals = Some(Rc::downgrade(&self.vals));
 
