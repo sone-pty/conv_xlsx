@@ -61,7 +61,7 @@ impl CellValue {
                 if let Ok(v) = val_str.parse::<i8>() {
                     Self::DSByte(SByteValue(v))
                 } else {
-                    todo!()
+                    Self::DSByte(SByteValue(0))
                 }
             }
             "LString" => Self::DLString(LStringValue(val.clone())),
@@ -70,7 +70,7 @@ impl CellValue {
                 if let Ok(v) = val_str.parse::<i16>() {
                     Self::DShort(ShortValue(v))
                 } else {
-                    todo!()
+                    Self::DShort(ShortValue(0))
                 }
             }
             "ushort" => {
@@ -174,6 +174,34 @@ impl CellValue {
             CellValue::DArray,
             CellValue::DList
         )
+    }
+
+    pub fn is_lstring(&self) -> bool {
+        if let Self::DLString(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_lstring_arr(&self) -> bool {
+        match self {
+            Self::DList(v) => {
+                if let Self::DLString(_) = (v.0)[0] {
+                    true
+                } else {
+                    false
+                }
+            },
+            Self::DArray(v) => {
+                if let Self::DLString(_) = (v.0)[0] {
+                    true
+                } else {
+                    false
+                }
+            },
+            _ => false
+        }
     }
     
     fn get_basic_type_string(&self) -> String {
@@ -285,6 +313,9 @@ fn find_block(src: &str) -> usize {
 
 #[allow(dead_code)]
 fn collect_value(val: &str, dest: &mut CellValue) {
+    if val.is_empty() {
+        return
+    }
     // fill-fn
     let fill_elements = |arr: &mut Vec<CellValue>, elements: &Vec<&str>| {
         for e in elements {

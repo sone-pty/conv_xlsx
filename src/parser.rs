@@ -26,18 +26,25 @@ enum KeyType {
 }
 
 pub struct DefaultData(HashMap<Rc<String>, Box<CellValue>>);
-
 impl Default for DefaultData {
     fn default() -> Self {
         DefaultData(HashMap::with_capacity(20))
     }
 }
 
+pub struct VarData(HashMap<Rc<String>, Vec<Box<CellValue>>>);
+impl Default for VarData {
+    fn default() -> Self {
+        VarData(HashMap::with_capacity(20))
+    }
+}
+
 pub struct Parser {
     item_class: ItemClass,
     defaults: Rc<RefCell<DefaultData>>,
+    vals: Rc<RefCell<VarData>>,
     key_type: KeyType,
-    skip_cols: Vec<usize>,
+    skip_cols: Vec<usize>
 }
 
 impl CodeGenerator for Parser {
@@ -97,6 +104,7 @@ impl Parser {
         Parser {
             item_class: ItemClass::default(),
             defaults: Rc::from(RefCell::from(DefaultData::default())),
+            vals: Rc::from(RefCell::from(VarData::default())),
             key_type: KeyType::None,
             skip_cols: Vec::default(),
         }
@@ -136,6 +144,9 @@ impl Parser {
     //------------------------private---------------------------------
 
     fn parse_template(&mut self, table: ExcelTable) {
+        let width = table.width();
+        let height = table.height();
+
         // check flag for (1, 3)
         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
             if v.starts_with("#") {
@@ -148,7 +159,7 @@ impl Parser {
         }
 
         // collect skip_cols
-        for col in 0..table.width() {
+        for col in 0..width {
             if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
                 if v.starts_with("#") {
                     self.skip_cols.push(col);
@@ -156,41 +167,61 @@ impl Parser {
             }
         }
 
-        for col in (0..table.width()).filter(|x| !self.skip_cols.contains(x)) {
+        for col in (0..width).filter(|x| !self.skip_cols.contains(x)) {
+            let ident = table.cell(col, DATA_IDENTIFY_ROW).unwrap();
+            let ty = convert_type(table.cell(col, DATA_TYPE_ROW).unwrap().clone());
+
             // collect (comment, identify, type) in row (1, 3, 4)
-            if let (Some(c1), Some(c2), Some(c3)) = (
-                table.cell(col, DATA_COMMENT_ROW),
-                table.cell(col, DATA_IDENTIFY_ROW),
-                table.cell(col, DATA_TYPE_ROW),
-            ) {
+            if let Some(c1) = table.cell(col, DATA_COMMENT_ROW) {
                 self.item_class.items.push((
                     Some(c1.clone()),
-                    Some(c2.clone()),
-                    Some(convert_type(c3.clone())),
+                    Some(ident.clone()),
+                    Some(ty.clone()),
                 ));
             }
 
             // collect defaults
-            if let (Some(ident), Some(default), Some(ty)) = (
-                table.cell(col, DATA_IDENTIFY_ROW),
-                table.cell(col, DATA_DEFAULT_ROW),
-                table.cell(col, DATA_TYPE_ROW)
-            ) {
+            if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
                 use std::collections::hash_map::Entry;
                 match self.defaults.borrow_mut().0.entry(ident.clone()) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
-                        e.insert(Box::new(CellValue::new(default, &convert_type(ty.clone()))));
+                        e.insert(Box::new(CellValue::new(default, &ty)));
+                    }
+                }
+            }
+
+            // collect vars
+            if !self.vals.borrow_mut().0.contains_key(ident) {
+                self.vals.borrow_mut().0.insert(ident.clone(), Vec::default());
+                
+                for row in DATA_START_ROW..height-1 {
+                    use std::collections::hash_map::Entry;
+                    if let Some(v) = table.cell(col, row) {
+                        match self.vals.borrow_mut().0.entry(ident.clone()) {
+                            Entry::Occupied(mut e) => {
+                                e.get_mut().push(Box::new(CellValue::new(v, &ty)));
+                            }
+                            Entry::Vacant(_) => {}
+                        }
+                    } else {
+                        match self.vals.borrow_mut().0.entry(ident.clone()) {
+                            Entry::Occupied(mut e) => {
+                                e.get_mut().push(Box::new(CellValue::new(&Rc::new(String::default()), &ty)));
+                            }
+                            Entry::Vacant(_) => {}
+                        }
                     }
                 }
             }
         }
 
         self.item_class.defaults = Some(Rc::downgrade(&self.defaults));
+        self.item_class.vals = Some(Rc::downgrade(&self.vals));
 
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = self.key_type {
-            for row in DATA_START_ROW..table.height() - 1 {
+            for row in DATA_START_ROW..height-1 {
                 if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, row) {
                     vec.push(Some(v.clone()));
                 }
@@ -201,8 +232,6 @@ impl Parser {
 
 fn convert_type(mut v: Rc<String>) -> Rc<String> {
     if let Some(s) = Rc::get_mut(&mut v) {
-        // convert string
-        *s = s.replace("LString", "string");
         // convert array
         if let Some(idx) = s.find('[') {
             let mut n = idx;
