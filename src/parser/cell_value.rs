@@ -606,11 +606,3 @@ impl ValueInfo for ListValue {
         ty
     }
 }
-
-#[test]
-fn test_cellvalue() {
-    let ty = Rc::new(String::from("List<List<short[]>>"));
-    let val = Rc::new(String::from("{{{1,2},{3,4},{5}},{{1,2},{3,4},{5}}}"));
-    let cv = CellValue::new(&val, &ty);
-    println!("{}", cv.gen_code())
-}

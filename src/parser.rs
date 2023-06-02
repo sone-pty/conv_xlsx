@@ -10,8 +10,12 @@ use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
 use item_class::ItemClass;
 mod item_class;
 
+use base_class::BaseClass;
+mod base_class;
+
 use cell_value::CellValue;
 mod cell_value;
+
 mod stack;
 
 trait CodeGenerator {
@@ -41,6 +45,7 @@ impl Default for VarData {
 
 pub struct Parser {
     item_class: ItemClass,
+    base_class: BaseClass,
     defaults: Rc<RefCell<DefaultData>>,
     vals: Rc<RefCell<VarData>>,
     key_type: KeyType,
@@ -90,7 +95,11 @@ impl CodeGenerator for Parser {
         // ItemClass
         code.push_str(self.item_class.gen_code(end, tab_nums + 1).as_str());
         code.push_str(end);
+        // empty line
+        code.push_str(end);
         // BaseClass
+        code.push_str(self.base_class.gen_code(end, tab_nums + 1).as_str());
+        code.push_str(end);
 
         // namespace-end
         code.push('}');
@@ -103,6 +112,7 @@ impl Parser {
     pub fn new() -> Self {
         Parser {
             item_class: ItemClass::default(),
+            base_class: BaseClass::default(),
             defaults: Rc::from(RefCell::from(DefaultData::default())),
             vals: Rc::from(RefCell::from(VarData::default())),
             key_type: KeyType::None,
@@ -114,6 +124,8 @@ impl Parser {
         let file = ExcelFile::load_from_path(file_name);
         self.item_class.name = String::from(file_name);
         self.item_class.name.remove_matches(".xlsx");
+        self.base_class.name = String::from(file_name);
+        self.base_class.name.remove_matches(".xlsx");
 
         if let Ok(mut ff) = file {
             if let Ok(ret) = ff.parse_workbook() {
@@ -218,6 +230,8 @@ impl Parser {
 
         self.item_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.item_class.vals = Some(Rc::downgrade(&self.vals));
+        self.base_class.defaults = Some(Rc::downgrade(&self.defaults));
+        self.base_class.vals = Some(Rc::downgrade(&self.vals));
 
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = self.key_type {

@@ -1,0 +1,15 @@
+{
+    "editor.semanticTokenColorCustomizations": {
+        "enabled": true,
+        "rules": {
+            "*.mutable": {
+                "underline": false,
+            }
+        }
+    },
+
+    "editor.inlayHints.enabled": "on",
+    "editor.inlayHints.fontFamily": "Consolas",
+    "editor.inlayHints.fontSize": 12,
+    "editor.inlayHints.padding": true
+}
