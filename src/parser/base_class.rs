@@ -1,7 +1,7 @@
 use crate::defs::{DEFAULT_LINES, ItemStr};
 
 use super::cell_value::{CellValue, self};
-use super::{CodeGenerator, DefaultData, VarData};
+use super::{CodeGenerator, DefaultData, VarData, KeyType};
 use std::rc::Weak;
 use std::cell::RefCell;
 
@@ -10,7 +10,8 @@ pub struct BaseClass {
     pub defaults: Option<Weak<RefCell<DefaultData>>>,
     pub vals: Option<Weak<RefCell<VarData>>>,
     pub lines: usize,
-    pub required_fields: Option<Weak<RefCell<Vec<ItemStr>>>>
+    pub required_fields: Option<Weak<RefCell<Vec<ItemStr>>>>,
+    pub keytypes: Option<Weak<RefCell<KeyType>>>
 }
 
 impl Default for BaseClass {
@@ -20,7 +21,8 @@ impl Default for BaseClass {
             defaults: None,
             vals: None,
             lines: 0,
-            required_fields: None
+            required_fields: None,
+            keytypes: None
         }
     }
 }
@@ -29,7 +31,7 @@ impl CodeGenerator for BaseClass {
     type Output = String;
 
     fn gen_code(&self, end: &'static str, tab_nums: i32) -> Self::Output {
-        let mut code = String::with_capacity(1024);
+        let mut code = String::with_capacity(4096);
         
         let format = |n: i32, code: &mut String| {
             for _ in 0..n {
@@ -37,10 +39,11 @@ impl CodeGenerator for BaseClass {
             }
         };
 
-        if let (Some(weak_defaults), Some(weak_vars)) = (&self.defaults, &self.vals) {
-            if let (Some(up_defaults), Some(up_vars)) = (weak_defaults.upgrade(), weak_vars.upgrade()) {
+        if let (Some(weak_defaults), Some(weak_vars), Some(weak_keys)) = (&self.defaults, &self.vals, &self.keytypes) {
+            if let (Some(up_defaults), Some(up_vars), Some(up_keys)) = (weak_defaults.upgrade(), weak_vars.upgrade(), weak_keys.upgrade()) {
                 let map_defaults = &up_defaults.as_ref().borrow().0;
                 let map_vars = &up_vars.as_ref().borrow().0;
+                let keys = up_keys.as_ref().borrow();
 
                 if let Some(rfds) = self.required_fields.as_ref().unwrap().upgrade() {
                     let requires = &rfds.as_ref().borrow();
@@ -76,7 +79,31 @@ impl CodeGenerator for BaseClass {
                     code.push_str(end);
                     //--------------fixed code----------------------------
                 
-                    //TODO: DefKey static class
+                    // DefKey static class
+                    if let KeyType::DefKey(ref vals) = *keys {
+                        code.push_str(end);
+                        format(tab_nums + 1, &mut code);
+                        code.push_str("public static class DefKey");
+                        code.push_str(end);
+                        format(tab_nums + 1, &mut code);
+                        code.push('{');
+                        code.push_str(end);
+
+                        for v in vals {
+                            format(tab_nums + 2, &mut code);
+                            code.push_str("public const sbyte ");
+                            if let Some(ref v1) = v.0 {
+                                code.push_str(v1);
+                            }
+                            code.push_str(" = ");
+                            code.push_str(&v.1.to_string());
+                            code.push(';');
+                            code.push_str(end);
+                        }
+                        format(tab_nums + 1, &mut code);
+                        code.push('}');
+                        code.push_str(end);
+                    }
 
                     for term in 0..(self.lines / DEFAULT_LINES)+1 {
                         code.push_str(end);

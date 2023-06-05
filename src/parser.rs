@@ -23,9 +23,9 @@ trait CodeGenerator {
     fn gen_code(&self, end: &'static str, tab_nums: i32) -> Self::Output;
 }
 
-enum KeyType {
+pub enum KeyType {
     None,
-    DefKey(Vec<ItemStr>),
+    DefKey(Vec<(ItemStr, usize)>),
     OriginalTemplateId,
 }
 
@@ -49,7 +49,7 @@ pub struct Parser {
     defaults: Rc<RefCell<DefaultData>>,
     vals: Rc<RefCell<VarData>>,
     required_fields: Rc<RefCell<Vec<ItemStr>>>,
-    key_type: KeyType,
+    key_type: Rc<RefCell<KeyType>>,
     skip_cols: Vec<usize>
 }
 
@@ -57,7 +57,7 @@ impl CodeGenerator for Parser {
     type Output = String;
 
     fn gen_code(&self, end: &'static str, tab_nums: i32) -> Self::Output {
-        let mut code = String::with_capacity(1024);
+        let mut code = String::with_capacity(8192);
 
         // comment
         code.push_str("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////");
@@ -116,7 +116,7 @@ impl Parser {
             base_class: BaseClass::default(),
             defaults: Rc::from(RefCell::from(DefaultData::default())),
             vals: Rc::from(RefCell::from(VarData::default())),
-            key_type: KeyType::None,
+            key_type: Rc::from(RefCell::from(KeyType::None)),
             skip_cols: Vec::default(),
             required_fields: Rc::from(RefCell::from(Vec::default()))
         }
@@ -165,9 +165,9 @@ impl Parser {
         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
             if v.starts_with("#") {
                 if v.contains("DefKey") {
-                    self.key_type = KeyType::DefKey(vec![]);
+                    self.key_type = Rc::from(RefCell::from(KeyType::DefKey(vec![])));
                 } else {
-                    self.key_type = KeyType::OriginalTemplateId;
+                    self.key_type = Rc::from(RefCell::from(KeyType::OriginalTemplateId));
                 }
             }
         }
@@ -178,7 +178,7 @@ impl Parser {
                 if v.starts_with("#") {
                     self.skip_cols.push(col);
                 } else {
-                    self.required_fields.borrow_mut().push(Some(v.clone()));
+                    self.required_fields.as_ref().borrow_mut().push(Some(v.clone()));
                 }
             }
         }
@@ -199,7 +199,7 @@ impl Parser {
             // collect defaults
             if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
                 use std::collections::hash_map::Entry;
-                match self.defaults.borrow_mut().0.entry(ident.clone()) {
+                match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
                         e.insert(Box::new(CellValue::new(default, &ty)));
@@ -208,13 +208,13 @@ impl Parser {
             }
 
             // collect vars
-            if !self.vals.borrow_mut().0.contains_key(ident) {
-                self.vals.borrow_mut().0.insert(ident.clone(), Vec::default());
+            if !self.vals.as_ref().borrow_mut().0.contains_key(ident) {
+                self.vals.as_ref().borrow_mut().0.insert(ident.clone(), Vec::default());
                 
                 for row in DATA_START_ROW..height-1 {
                     use std::collections::hash_map::Entry;
                     if let Some(v) = table.cell(col, row) {
-                        match self.vals.borrow_mut().0.entry(ident.clone()) {
+                        match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
                                 e.get_mut().push(Box::new(CellValue::new(v, &ty)));
                             }
@@ -222,7 +222,7 @@ impl Parser {
                         }
                     } else {
                         // empty cell
-                        match self.vals.borrow_mut().0.entry(ident.clone()) {
+                        match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
                                 e.get_mut().push(Box::new(CellValue::new(&Rc::new(String::default()), &ty)));
                             }
@@ -241,12 +241,13 @@ impl Parser {
         self.base_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.base_class.vals = Some(Rc::downgrade(&self.vals));
         self.base_class.required_fields = Some(Rc::downgrade(&self.required_fields));
+        self.base_class.keytypes = Some(Rc::downgrade(&self.key_type));
 
         // collect DefKey in col 1, data start frow row 8
-        if let KeyType::DefKey(ref mut vec) = self.key_type {
+        if let KeyType::DefKey(ref mut vec) = *self.key_type.as_ref().borrow_mut() {
             for row in DATA_START_ROW..height-1 {
                 if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, row) {
-                    vec.push(Some(v.clone()));
+                    vec.push((Some(v.clone()), row - DATA_START_ROW));
                 }
             }
         }

@@ -25,7 +25,7 @@ impl CodeGenerator for ItemClass {
     type Output = String;
 
     fn gen_code(&self, end: &'static str, tab_nums: i32) -> Self::Output {
-        let mut code: String = String::with_capacity(512);
+        let mut code: String = String::with_capacity(2048);
 
         let format = |n: i32, code: &mut String| {
             for _ in 0..n {
