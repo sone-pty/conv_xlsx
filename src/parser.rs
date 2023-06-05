@@ -48,6 +48,7 @@ pub struct Parser {
     base_class: BaseClass,
     defaults: Rc<RefCell<DefaultData>>,
     vals: Rc<RefCell<VarData>>,
+    required_fields: Rc<RefCell<Vec<ItemStr>>>,
     key_type: KeyType,
     skip_cols: Vec<usize>
 }
@@ -117,6 +118,7 @@ impl Parser {
             vals: Rc::from(RefCell::from(VarData::default())),
             key_type: KeyType::None,
             skip_cols: Vec::default(),
+            required_fields: Rc::from(RefCell::from(Vec::default()))
         }
     }
 
@@ -170,11 +172,13 @@ impl Parser {
             }
         }
 
-        // collect skip_cols
+        // collect skip_cols and required fields
         for col in 0..width {
             if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
                 if v.starts_with("#") {
                     self.skip_cols.push(col);
+                } else {
+                    self.required_fields.borrow_mut().push(Some(v.clone()));
                 }
             }
         }
@@ -236,6 +240,7 @@ impl Parser {
         self.base_class.lines = height - DATA_START_ROW - 1;
         self.base_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.base_class.vals = Some(Rc::downgrade(&self.vals));
+        self.base_class.required_fields = Some(Rc::downgrade(&self.required_fields));
 
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = self.key_type {

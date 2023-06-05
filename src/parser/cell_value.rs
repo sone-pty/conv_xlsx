@@ -14,7 +14,6 @@ macro_rules! gen_code {
     ($self:ident, $($enum:ident::$variant:ident),+) => {
         match $self {
             $( $enum::$variant(v) => v.value() ),+,
-            _ => String::default(),
         }
     };
 }
@@ -39,6 +38,10 @@ impl CellValue {
     pub fn new(val: &Rc<String>, ty: &Rc<String>) -> CellValue {
         let val_str = val.as_str();
         let ty_str = ty.as_str();
+
+        if val_str.is_empty() {
+            return Self::DNone(NoneValue);
+        }
 
         match ty_str {
             "bool" => {
@@ -172,7 +175,8 @@ impl CellValue {
             CellValue::DString,
             CellValue::DLString,
             CellValue::DArray,
-            CellValue::DList
+            CellValue::DList,
+            CellValue::DNone
         )
     }
 
@@ -203,6 +207,16 @@ impl CellValue {
             _ => false
         }
     }
+
+    pub fn is_none(&self) -> bool {
+        if let Self::DNone(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    //--------------------------------internal---------------------------------------------
     
     fn get_basic_type_string(&self) -> String {
         get_basic_type_string!(
@@ -418,6 +432,16 @@ pub struct NoneValue;
 
 //----------------------------------impl-------------------------------------------
 
+impl ValueInfo for NoneValue {
+    fn value(&self) -> String {
+        String::from("null")
+    }
+
+    fn ty(&self) -> String {
+        String::from("none")
+    }
+}
+
 impl ValueInfo for BoolValue {
     fn value(&self) -> String {
         if self.0 == false {
@@ -444,10 +468,16 @@ impl ValueInfo for LStringValue {
 
 impl ValueInfo for StringValue {
     fn value(&self) -> String {
-        let mut ret = String::from('\"');
-        ret.push_str(&self.0);
-        ret.push('\"');
-        ret
+        if self.0.is_empty() {
+            String::from("null")
+        } else if self.0.as_str() == "\"\"" {
+            String::from("\"\"")
+        } else {
+            let mut ret = String::from('\"');
+            ret.push_str(&self.0);
+            ret.push('\"');
+            ret
+        }
     }
 
     fn ty(&self) -> String {
