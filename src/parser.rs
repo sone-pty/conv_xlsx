@@ -169,7 +169,7 @@ impl Parser {
         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
             if v.starts_with("#") {
                 if v.contains("DefKey") {
-                    self.key_type = Rc::from(RefCell::from(KeyType::DefKey(vec![])));
+                    self.key_type = Rc::from(RefCell::from(KeyType::DefKey(Vec::default())));
                 } else {
                     self.key_type = Rc::from(RefCell::from(KeyType::OriginalTemplateId));
                 }
@@ -186,6 +186,34 @@ impl Parser {
                 }
             } else {
                 self.skip_cols.push(col);
+            }
+        }
+
+        // pre-process LString
+        let mut ls_cols: Vec<(usize, bool)> = Vec::default();
+        for col in 0..width {
+            if let Some(v) = table.cell(col, DATA_TYPE_ROW) {
+                if v.contains("LString") {
+                    if v.as_ref() == "LString" {
+                        ls_cols.push((col, true))
+                    } else {
+                        ls_cols.push((col, false))
+                    }
+                }
+            }
+        }
+        for row in DATA_START_ROW..height-1 {
+            for td in ls_cols.iter() {
+                if let Some(data) = table.cell(td.0, row) {
+                    Self::pre_process_lstring(&ls_map, data, td.1, &mut ls_seed);
+                } else {
+                    // empty cell
+                    if let Some(default) = table.cell(td.0, DATA_DEFAULT_ROW) {
+                        Self::pre_process_lstring(&ls_map, default, td.1, &mut ls_seed);
+                    } else {
+                        Self::pre_process_lstring(&ls_map, "", true, &mut ls_seed);
+                    }
+                }
             }
         }
 
@@ -222,11 +250,6 @@ impl Parser {
                     if let Some(v) = table.cell(col, row) {
                         match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
-                                if *ty == "LString" {
-                                    Self::pre_process_lstring(&ls_map, v, true, &mut ls_seed);
-                                } else if *ty == "LString[]" {
-                                    Self::pre_process_lstring(&ls_map, v, false, &mut ls_seed);
-                                }
                                 e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map)));
                             }
                             Entry::Vacant(_) => {}
@@ -235,7 +258,11 @@ impl Parser {
                         // empty cell
                         match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
-                                e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map)));
+                                if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
+                                    e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map)));
+                                } else {
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map)));
+                                }
                             }
                             Entry::Vacant(_) => {}
                         }
