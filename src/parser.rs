@@ -18,6 +18,8 @@ mod cell_value;
 
 mod stack;
 
+type LSMap = Rc<RefCell<HashMap<Rc<String>, usize>>>;
+
 trait CodeGenerator {
     type Output;
     fn gen_code(&self, end: &'static str, tab_nums: i32) -> Self::Output;
@@ -160,6 +162,8 @@ impl Parser {
     fn parse_template(&mut self, table: ExcelTable) {
         let width = table.width();
         let height = table.height();
+        let ls_map: LSMap = Rc::from(RefCell::from(HashMap::with_capacity(64)));
+        let mut ls_seed = 0;
 
         // check flag for (1, 3)
         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
@@ -180,6 +184,8 @@ impl Parser {
                 } else {
                     self.required_fields.as_ref().borrow_mut().push(Some(v.clone()));
                 }
+            } else {
+                self.skip_cols.push(col);
             }
         }
 
@@ -202,7 +208,7 @@ impl Parser {
                 match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
-                        e.insert(Box::new(CellValue::new(default, &ty)));
+                        e.insert(Box::new(CellValue::new(default, &ty, &ls_map)));
                     }
                 }
             }
@@ -216,7 +222,12 @@ impl Parser {
                     if let Some(v) = table.cell(col, row) {
                         match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
-                                e.get_mut().push(Box::new(CellValue::new(v, &ty)));
+                                if *ty == "LString" {
+                                    Self::pre_process_lstring(&ls_map, v, true, &mut ls_seed);
+                                } else if *ty == "LString[]" {
+                                    Self::pre_process_lstring(&ls_map, v, false, &mut ls_seed);
+                                }
+                                e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map)));
                             }
                             Entry::Vacant(_) => {}
                         }
@@ -224,7 +235,7 @@ impl Parser {
                         // empty cell
                         match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
-                                e.get_mut().push(Box::new(CellValue::new(&Rc::new(String::default()), &ty)));
+                                e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map)));
                             }
                             Entry::Vacant(_) => {}
                         }
@@ -248,6 +259,32 @@ impl Parser {
             for row in DATA_START_ROW..height-1 {
                 if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, row) {
                     vec.push((Some(v.clone()), row - DATA_START_ROW));
+                }
+            }
+        }
+    }
+
+    fn pre_process_lstring<'a>(ls_map: &LSMap, val: &str, is_trival: bool, ls_seed: &'a mut usize) {
+        let mut data = ls_map.as_ref().borrow_mut();
+        use std::collections::hash_map::Entry;
+
+        if !is_trival {
+            let elements: Vec<&str> = val[1..val.len()-1].split(',').collect();
+            for v in elements {
+                match data.entry(Rc::from(String::from(v))) {
+                    Entry::Occupied(_) => {}
+                    Entry::Vacant(e) => {
+                        e.insert(*ls_seed);
+                        *ls_seed += 1;
+                    }
+                }
+            }
+        } else {
+            match data.entry(Rc::from(String::from(val))) {
+                Entry::Occupied(_) => {}
+                Entry::Vacant(e) => {
+                    e.insert(*ls_seed);
+                    *ls_seed += 1;
                 }
             }
         }

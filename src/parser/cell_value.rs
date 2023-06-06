@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use super::stack::Stack;
+use super::{stack::Stack, LSMap};
 
 macro_rules! get_basic_type_string {
     ($self:ident, $($enum:ident::$variant:ident),+) => {
@@ -35,7 +35,7 @@ pub enum CellValue {
 
 impl CellValue {
     // TODO: process error
-    pub fn new(val: &Rc<String>, ty: &Rc<String>) -> CellValue {
+    pub fn new(val: &Rc<String>, ty: &Rc<String>, ls_map: &LSMap) -> CellValue {
         let val_str = val.as_str();
         let ty_str = ty.as_str();
 
@@ -67,7 +67,14 @@ impl CellValue {
                     Self::DSByte(SByteValue(0))
                 }
             }
-            "LString" => Self::DLString(LStringValue(val.clone())),
+            "LString" => {
+                let ls_data = ls_map.as_ref().borrow();
+                if ls_data.contains_key(val) {
+                    Self::DLString(LStringValue(val.clone(), ls_data[val]))
+                } else {
+                    Self::DLString(LStringValue(val.clone(), 0))
+                }
+            },
             "string" => Self::DString(StringValue(val.clone())),
             "short" => {
                 if let Ok(v) = val_str.parse::<i16>() {
@@ -152,7 +159,7 @@ impl CellValue {
                 }
                 
                 if op_stack.is_empty() {
-                    collect_value(val_str, &mut ret);
+                    collect_value(val_str, &mut ret, &ls_map);
                     ret
                 } else {
                     // TODO: err
@@ -228,7 +235,8 @@ impl CellValue {
             CellValue::DUInt, 
             CellValue::DShort, 
             CellValue::DUShort, 
-            CellValue::DString
+            CellValue::DString,
+            CellValue::DLString
         )
     }
 
@@ -238,7 +246,7 @@ impl CellValue {
             "short" => CellValue::DShort(ShortValue(0)),
             "ushort" => CellValue::DUShort(UShortValue(0)),
             "string" => CellValue::DString(StringValue(Rc::default())),
-            "LString" => CellValue::DLString(LStringValue(Rc::default())),
+            "LString" => CellValue::DLString(LStringValue(Rc::default(), usize::default())),
             "int" => CellValue::DInt(IntValue(0)),
             "uint" => CellValue::DUInt(UIntValue(0)),
             "sbyte" => CellValue::DSByte(SByteValue(0)),
@@ -261,7 +269,7 @@ impl CellValue {
                 CellValue::DInt(IntValue(0))
             },
             CellValue::DLString(_) => {
-                CellValue::DLString(LStringValue(Rc::default()))
+                CellValue::DLString(LStringValue(Rc::default(), usize::default()))
             },
             CellValue::DShort(_) => {
                 CellValue::DShort(ShortValue(0))
@@ -326,10 +334,12 @@ fn find_block(src: &str) -> usize {
 }
 
 #[allow(dead_code)]
-fn collect_value(val: &str, dest: &mut CellValue) {
+fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
     if val.is_empty() {
         return
     }
+
+    let ls_data = ls_map.as_ref().borrow();
     // fill-fn
     let fill_elements = |arr: &mut Vec<CellValue>, elements: &Vec<&str>| {
         for e in elements {
@@ -345,7 +355,10 @@ fn collect_value(val: &str, dest: &mut CellValue) {
                     let _ = e.parse::<i32>().map(|v| arr.push(CellValue::DInt( IntValue(v) )));
                 },
                 CellValue::DLString(_) => {
-                    todo!()
+                    let key = Rc::from(String::from(*e));
+                    if ls_data.contains_key(&key) {
+                        arr.push(CellValue::DLString(LStringValue(key.clone(), ls_data[&key])))
+                    }
                 },
                 CellValue::DShort(_) => {
                     let _ = e.parse::<i16>().map(|v| arr.push(CellValue::DShort( ShortValue(v) )));
@@ -381,7 +394,7 @@ fn collect_value(val: &str, dest: &mut CellValue) {
                     while start_idx < val.len() {
                         let end_idx = find_block(&val[start_idx..]) + start_idx;
                         let mut new_arr = CellValue::DArray(ArrayValue(vec![CellValue::clone_from_other_with_default(&(arr.0)[0])]));
-                        collect_value(&val[start_idx..end_idx], &mut new_arr);
+                        collect_value(&val[start_idx..end_idx], &mut new_arr, &ls_map);
                         temp.push(new_arr);
                         start_idx = end_idx + 1;
                     }
@@ -394,7 +407,7 @@ fn collect_value(val: &str, dest: &mut CellValue) {
                     while start_idx < val.len() {
                         let end_idx = find_block(&val[start_idx..]) + start_idx;
                         let mut new_lst = CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]));
-                        collect_value(&val[start_idx..end_idx], &mut new_lst);
+                        collect_value(&val[start_idx..end_idx], &mut new_lst, &ls_map);
                         temp.push(new_lst); 
                         start_idx = end_idx + 1;
                     }
@@ -414,11 +427,13 @@ fn collect_value(val: &str, dest: &mut CellValue) {
 }
 
 pub trait ValueInfo {
+    // code
     fn value(&self) -> String;
+    // used by array/list code
     fn ty(&self) -> String;
 }
 pub struct BoolValue(bool);
-pub struct LStringValue(Rc<String>);
+pub struct LStringValue(Rc<String>, usize);
 pub struct StringValue(Rc<String>);
 pub struct ShortValue(i16);
 pub struct UShortValue(u16);
@@ -458,11 +473,11 @@ impl ValueInfo for BoolValue {
 
 impl ValueInfo for LStringValue {
     fn value(&self) -> String {
-        todo!()
+        self.1.to_string()
     }
 
     fn ty(&self) -> String {
-        todo!()
+        String::from("int")
     }
 }
 
@@ -562,6 +577,7 @@ impl ValueInfo for ArrayValue {
                     CellValue::DInt(v) => {v.value()},
                     CellValue::DUInt(v) => {v.value()},
                     CellValue::DString(v) => {v.value()},
+                    CellValue::DLString(v) => {v.value()},
                     CellValue::DShort(v) => {v.value()},
                     CellValue::DUShort(v) => {v.value()},
                     _ => {String::default()}
@@ -601,6 +617,7 @@ impl ValueInfo for ListValue {
                     CellValue::DInt(v) => {v.value()},
                     CellValue::DUInt(v) => {v.value()},
                     CellValue::DString(v) => {v.value()},
+                    CellValue::DLString(v) => {v.value()},
                     CellValue::DShort(v) => {v.value()},
                     CellValue::DUShort(v) => {v.value()},
                     CellValue::DArray(v) => {v.value()},
