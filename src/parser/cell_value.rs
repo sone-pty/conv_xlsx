@@ -323,11 +323,6 @@ fn find_block(src: &str) -> usize {
     if let Some(start_idx) = src.find('{') {
         let mut idx = start_idx;
         for ref v in src.chars() {
-/*             if v.is_ascii() {
-                idx += 1;
-            } else {
-                idx += v.len_utf8();
-            } */
             idx += v.len_utf8();
             match v {
                 '{' => { st.push('{'); },

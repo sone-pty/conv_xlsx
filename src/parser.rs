@@ -14,7 +14,12 @@ use base_class::BaseClass;
 mod base_class;
 
 use cell_value::CellValue;
+
+use self::fk_value::{FKValue, RawValData};
 mod cell_value;
+
+//use fk_value::FKValue;
+mod fk_value;
 
 mod stack;
 
@@ -165,9 +170,31 @@ impl Parser {
         let ls_map: LSMap = Rc::from(RefCell::from(HashMap::with_capacity(64)));
         let mut ls_seed = 0;
 
+        // parse FK
+        let mut fk_data = Vec::<RawValData>::default();
+        for col in 0..width {
+            if let Some(v) = table.cell(col, DATA_FOREIGN_KEY_ROW) {
+                if v.starts_with('*') {
+                    let mut vals: Vec<&str> = Vec::default();
+                    for idx in DATA_START_ROW..height-1 {
+                        if let Some(d) = table.cell(col, idx) {
+                            vals.push(d);
+                        } else if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
+                            vals.push(default);
+                        } else {
+                            vals.push("");
+                        }
+                    }
+                    fk_data.push((col, (&v[1..], vals)));
+                }
+            }
+        }
+        let fk_value = FKValue::new(fk_data);
+        fk_value.parse();
+
         // check flag for (1, 3)
         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
-            if v.starts_with("#") {
+            if v.starts_with('#') {
                 if v.contains("DefKey") {
                     self.key_type = Rc::from(RefCell::from(KeyType::DefKey(Vec::default())));
                 } else {
@@ -179,7 +206,7 @@ impl Parser {
         // collect skip_cols and required fields
         for col in 0..width {
             if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
-                if v.starts_with("#") {
+                if v.starts_with('#') {
                     self.skip_cols.push(col);
                 } else {
                     self.required_fields.as_ref().borrow_mut().push(Some(v.clone()));
@@ -291,11 +318,11 @@ impl Parser {
         }
     }
 
-    fn pre_process_lstring<'a>(ls_map: &LSMap, val: &str, is_trival: bool, ls_seed: &'a mut usize) {
+    fn pre_process_lstring<'a>(ls_map: &LSMap, val: &str, is_trivial: bool, ls_seed: &'a mut usize) {
         let mut data = ls_map.as_ref().borrow_mut();
         use std::collections::hash_map::Entry;
 
-        if !is_trival {
+        if !is_trivial {
             let elements: Vec<&str> = val[1..val.len()-1].split(',').collect();
             for v in elements {
                 match data.entry(Rc::from(String::from(v))) {
