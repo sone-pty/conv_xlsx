@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::defs::{DATA_START_ROW, DEFAULT_SUFFIX, DATA_DEFAULT_ROW};
+use crate::defs::{DATA_START_ROW, DEFAULT_SUFFIX, DATA_DEFAULT_ROW, XLSXS_PATH};
 
 use super::stack::Stack;
 
@@ -122,9 +122,11 @@ impl<'a> FKValue<'a> {
     }
 
     fn read_fk_table(&'a self, name: &'a str) {
-        let mut file_name = String::from(name);
-        file_name.push_str(DEFAULT_SUFFIX);
-        if let Ok(table) = super::Parser::get_table_with_id(&file_name, "Template") {
+        let mut xlsxs_path = PathBuf::from(XLSXS_PATH);
+        xlsxs_path.push(name);
+        xlsxs_path.set_extension(DEFAULT_SUFFIX);
+
+        if let Ok(table) = super::Parser::get_table_with_id(xlsxs_path, "Template") {
             let mut fk_map = self.fk_map.borrow_mut();
             let mut fks = HashMap::<Rc<String>, Rc<String>>::default();
             let height = table.height();

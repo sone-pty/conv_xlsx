@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::{Error, ErrorKind, Result},
-    rc::Rc,
+    rc::Rc, path::Path,
 };
 use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
 
@@ -129,12 +129,12 @@ impl Parser {
         }
     }
 
-    pub fn read_file(&mut self, file_name: &str) -> Result<()> {
+    pub fn read_file<P: AsRef<Path>>(&mut self, file_name: &str, path: P) -> Result<()> {
         self.item_class.name = String::from(file_name);
         self.item_class.name.remove_matches(".xlsx");
         self.base_class.name = String::from(file_name);
         self.base_class.name.remove_matches(".xlsx");
-        let table = Self::get_table_with_id(file_name, "Template")?;
+        let table = Self::get_table_with_id(path, "Template")?;
         self.parse_template(table);
         Ok(())
     }
@@ -143,8 +143,8 @@ impl Parser {
         self.gen_code(end, 0)
     }
 
-    pub(crate) fn get_table_with_id(file_name: &str, sheet: &str) -> Result<ExcelTable> {
-        let file = ExcelFile::load_from_path(file_name);
+    pub(crate) fn get_table_with_id<P: AsRef<Path>>(path: P ,sheet: &str) -> Result<ExcelTable> {
+        let file = ExcelFile::load_from_path(path);
         if let Ok(mut ff) = file {
             match ff.parse_workbook() {
                 Ok(ret) => {
