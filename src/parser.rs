@@ -129,11 +129,9 @@ impl Parser {
         }
     }
 
-    pub fn read_file<P: AsRef<Path>>(&mut self, file_name: &str, path: P) -> Result<()> {
-        self.item_class.name = String::from(file_name);
-        self.item_class.name.remove_matches(".xlsx");
-        self.base_class.name = String::from(file_name);
-        self.base_class.name.remove_matches(".xlsx");
+    pub fn read_file<P: AsRef<Path>>(&mut self, base_name: &str, path: P) -> Result<()> {
+        self.item_class.name = String::from(base_name);
+        self.base_class.name = String::from(base_name);
         let table = Self::get_table_with_id(path, "Template")?;
         self.parse_template(table);
         Ok(())

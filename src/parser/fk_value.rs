@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::defs::{DATA_START_ROW, DEFAULT_SUFFIX, DATA_DEFAULT_ROW, XLSXS_PATH};
+use crate::defs::{DATA_START_ROW, DEFAULT_SOURCE_SUFFIX, DATA_DEFAULT_ROW, SOURCE_XLSXS_DIR};
 
 use super::stack::Stack;
 
@@ -66,14 +66,23 @@ impl<'a> FKValue<'a> {
     fn parse_internal(&'a self, val: &'a str, pattern: &'a str, col: &'a usize) {
         let mut ch_stack = Stack::<char>::new();
 
-        let take_value = |st: &mut Stack<char>| -> String {
+        let take_and_replace_value = |st: &mut Stack<char>, dest: &mut String, fks: &HashMap<Rc<String>, Rc<String>>| {
             let mut s = String::with_capacity(10);
             while !st.is_empty() {
                 if let Ok(r) = st.pop() {
                     s.push(r)
                 }
             }
-            s.chars().rev().collect()
+
+            let rev: String = s.chars().rev().collect();
+            if !rev.is_empty() {
+                if let Some(vv) = fks.get(&rev) {
+                    dest.push_str(vv);
+                } else {
+                    // TODO
+                    dest.push_str("-1");
+                }
+            }
         };
         
         // new value
@@ -89,10 +98,7 @@ impl<'a> FKValue<'a> {
                         '{' => { rs.push(v); },
                         '}' | ',' => {
                             rs.push(v);
-                            let keyword = take_value(&mut ch_stack);
-                            if !keyword.is_empty() {
-                                rs.push_str(fks.get(&keyword).unwrap());
-                            }
+                            take_and_replace_value(&mut ch_stack, &mut rs, fks);
                         },
                         _ => {
                             ch_stack.push(v);
@@ -100,16 +106,13 @@ impl<'a> FKValue<'a> {
                     }
                 }
                 if !ch_stack.is_empty() {
-                    let keyword = take_value(&mut ch_stack);
-                    if !keyword.is_empty() {
-                        rs.push_str(fks.get(&keyword).unwrap());
-                    }
+                    take_and_replace_value(&mut ch_stack, &mut rs, fks);
                 }
             } else {
                 todo!("err")
             }
         } else {
-
+            
         }
 
         // push in outvals
@@ -122,9 +125,9 @@ impl<'a> FKValue<'a> {
     }
 
     fn read_fk_table(&'a self, name: &'a str) {
-        let mut xlsxs_path = PathBuf::from(XLSXS_PATH);
+        let mut xlsxs_path = PathBuf::from(SOURCE_XLSXS_DIR);
         xlsxs_path.push(name);
-        xlsxs_path.set_extension(DEFAULT_SUFFIX);
+        xlsxs_path.set_extension(DEFAULT_SOURCE_SUFFIX);
 
         if let Ok(table) = super::Parser::get_table_with_id(xlsxs_path, "Template") {
             let mut fk_map = self.fk_map.borrow_mut();

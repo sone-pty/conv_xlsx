@@ -58,7 +58,7 @@ impl CellValue {
                 if let Ok(v) = val_str.parse::<u8>() {
                     Self::DByte(ByteValue(v))
                 } else {
-                    todo!()
+                    Self::DByte(ByteValue(0))
                 }
             }
             "sbyte" => {
@@ -88,21 +88,21 @@ impl CellValue {
                 if let Ok(v) = val_str.parse::<u16>() {
                     Self::DUShort(UShortValue(v))
                 } else {
-                    todo!()
+                    Self::DUShort(UShortValue(0))
                 }
             }
             "int" => {
                 if let Ok(v) = val_str.parse::<i32>() {
                     Self::DInt(IntValue(v))
                 } else {
-                    todo!()
+                    Self::DInt(IntValue(0))
                 }
             }
             "uint" => {
                 if let Ok(v) = val_str.parse::<u32>() {
                     Self::DUInt(UIntValue(v))
                 } else {
-                    todo!()
+                    Self::DUInt(UIntValue(0))
                 }
             }
             // array or list

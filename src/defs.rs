@@ -18,10 +18,11 @@ pub const DATA_TEMPLATE_ID_POS: (usize, usize) = (1, 3);
 pub type ItemStr = Option<Rc<String>>;
 
 pub const OUTPUT_PATH: &'static str = r"output/";
-pub const XLSXS_PATH: &'static str = r"xlsxs/";
+pub const SOURCE_XLSXS_DIR: &'static str = r"xlsxs/";
 
 // 默认多少行数据切换构造方法
 pub const DEFAULT_LINES: usize = 101;
 
 // 默认的文件后缀
-pub const DEFAULT_SUFFIX: &'static str = "xlsx";
+pub const DEFAULT_SOURCE_SUFFIX: &'static str = "xlsx";
+pub const DEFAULT_DEST_SUFFIX: &'static str = "cs";
