@@ -21,3 +21,6 @@ pub const OUTPUT_PATH: &'static str = "output";
 
 // 默认多少行数据切换构造方法
 pub const DEFAULT_LINES: usize = 101;
+
+// 默认的文件后缀
+pub const DEFAULT_SUFFIX: &'static str = ".xlsx";

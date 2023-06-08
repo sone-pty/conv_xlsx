@@ -182,7 +182,7 @@ impl Parser {
             if let Some(v) = table.cell(col, DATA_FOREIGN_KEY_ROW) {
                 if v.starts_with('*') {
                     let mut vals: Vec<&str> = Vec::default();
-                    for idx in DATA_START_ROW..height-1 {
+                    for idx in DATA_DEFAULT_ROW..height-1 {
                         if let Some(d) = table.cell(col, idx) {
                             vals.push(d);
                         } else if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
@@ -269,7 +269,12 @@ impl Parser {
                 match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
-                        e.insert(Box::new(CellValue::new(default, &ty, &ls_map)));
+                        let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
+                        if !fk_default.is_empty() {
+                            e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map)));
+                        } else {
+                            e.insert(Box::new(CellValue::new(default, &ty, &ls_map)));
+                        }
                     }
                 }
             }
@@ -283,7 +288,12 @@ impl Parser {
                     if let Some(v) = table.cell(col, row) {
                         match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
-                                e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map)));
+                                let fk_v = fk_value.get_value(col, row);
+                                if !fk_v.is_empty() {
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_v)), &ty, &ls_map)));
+                                } else {
+                                    e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map)));
+                                }
                             }
                             Entry::Vacant(_) => {}
                         }
@@ -292,7 +302,12 @@ impl Parser {
                         match self.vals.as_ref().borrow_mut().0.entry(ident.clone()) {
                             Entry::Occupied(mut e) => {
                                 if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
-                                    e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map)));
+                                    let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
+                                    if !fk_default.is_empty() {
+                                        e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map)));
+                                    } else {
+                                        e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map)));
+                                    }
                                 } else {
                                     e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map)));
                                 }

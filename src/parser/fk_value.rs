@@ -1,20 +1,19 @@
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::cell::RefCell;
-use std::io::{Error, ErrorKind};
+use std::rc::Rc;
 
-use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
+use crate::defs::{DATA_START_ROW, DEFAULT_SUFFIX, DATA_DEFAULT_ROW};
 
 use super::stack::Stack;
 
-type FKMap<'a> = HashMap<&'a str, HashMap<&'a str, &'a str>>;
+type FKMap<'a> = HashMap<&'a str, HashMap<Rc<String>, Rc<String>>>;
 // <col, (fk_pattern, vals)>
 pub type RawValData<'a> = (usize, (&'a str, Vec<&'a str>));
 
 pub struct FKValue<'a> {
     rawdata: HashMap<usize, ColRawData<'a>>, // <col, data>
     fk_map: RefCell<FKMap<'a>>,
-    outvals: HashMap<usize, Vec<String>>
+    outvals: RefCell<HashMap<usize, Vec<String>>>
 }
 
 struct ColRawData<'a> {
@@ -26,37 +25,35 @@ impl<'a> FKValue<'a> {
     pub fn new(vals: Vec<RawValData<'a>>) -> Self {
         let mut rawdata: HashMap<usize, ColRawData<'a>> = HashMap::default();
         let fk_map: RefCell<FKMap<'a>> = RefCell::from(HashMap::default());
-        let outvals: HashMap<usize, Vec<String>> = HashMap::default();
+        let outvals: RefCell<HashMap<usize, Vec<String>>> = RefCell::from(HashMap::default());
 
         for v in vals {
-            match rawdata.entry(v.0) {
-                Entry::Occupied(mut e) => {
-                    for vv in v.1.1 {
-                        e.get_mut().vals.push(vv);
-                    }
-                }
-                Entry::Vacant(e) => {
-                    e.insert(ColRawData { fk_pattern: v.1.0, vals: Vec::default() });
-                }
+            if !rawdata.contains_key(&v.0) {
+                rawdata.insert(v.0, ColRawData { fk_pattern: v.1.0, vals: Vec::default() });
+            }
+
+            let coldata = rawdata.get_mut(&v.0).unwrap();
+            for vv in v.1.1 {
+                coldata.vals.push(vv);
             }
         }
 
         Self { rawdata, fk_map, outvals }
     }
 
-    pub fn parse(&self) {
-        for (_, v) in self.rawdata.iter() {
+    pub fn parse(&'a self) {
+        for (col, v) in self.rawdata.iter() {
             for vv in v.vals.iter() {
-                self.parse_internal(*vv, v.fk_pattern);
+                self.parse_internal(*vv, v.fk_pattern, col);
             }
         }
     }
 
     pub fn get_value(&'a self, col: usize, row: usize) -> &'a str {
-        if self.outvals.contains_key(&col) {
-            let vals = self.outvals.get(&col).unwrap();
-            if row < vals.len() {
-                &vals[row]
+        if self.outvals.borrow().contains_key(&col) {
+            let vals = unsafe { (*self.outvals.as_ptr()).get(&col).unwrap() };
+            if row - DATA_DEFAULT_ROW < vals.len() {
+                &vals[row - DATA_DEFAULT_ROW]
             } else {
                 ""
             }
@@ -66,8 +63,7 @@ impl<'a> FKValue<'a> {
     }
 
     //----------------------------private-------------------------------
-    fn parse_internal(&self, val: &'a str, pattern: &'a str) {
-        let fk_map = self.fk_map.borrow();
+    fn parse_internal(&'a self, val: &'a str, pattern: &'a str, col: &'a usize) {
         let mut ch_stack = Stack::<char>::new();
 
         let take_value = |st: &mut Stack<char>| -> String {
@@ -79,13 +75,15 @@ impl<'a> FKValue<'a> {
             }
             s.chars().rev().collect()
         };
+        
+        // new value
+        let mut rs = String::default();
 
         if is_word(pattern) {
-            if !fk_map.contains_key(pattern) {
+            if !self.fk_map.borrow().contains_key(pattern) {
                 self.read_fk_table(pattern);
             }
-            if let Some(fks) = fk_map.get(pattern) {
-                let mut rs = String::default();
+            if let Some(fks) = self.fk_map.borrow().get(pattern) {
                 for v in val.chars() {
                     match v {
                         '{' => { rs.push(v); },
@@ -93,12 +91,18 @@ impl<'a> FKValue<'a> {
                             rs.push(v);
                             let keyword = take_value(&mut ch_stack);
                             if !keyword.is_empty() {
-                                rs.push_str(fks.get(keyword.as_str()).unwrap());
+                                rs.push_str(fks.get(&keyword).unwrap());
                             }
                         },
                         _ => {
                             ch_stack.push(v);
                         }
+                    }
+                }
+                if !ch_stack.is_empty() {
+                    let keyword = take_value(&mut ch_stack);
+                    if !keyword.is_empty() {
+                        rs.push_str(fks.get(&keyword).unwrap());
                     }
                 }
             } else {
@@ -107,11 +111,30 @@ impl<'a> FKValue<'a> {
         } else {
 
         }
+
+        // push in outvals
+        let mut outvals_mut = self.outvals.borrow_mut();
+        if !outvals_mut.contains_key(col) {
+            outvals_mut.insert(*col, Vec::default());
+        }
+        let nvals = outvals_mut.get_mut(col).unwrap();
+        nvals.push(rs);
     }
 
-    fn read_fk_table(&self, name: &str) {
-        if let Ok(table) = super::Parser::get_table_with_id(name, "Template") {
-            
+    fn read_fk_table(&'a self, name: &'a str) {
+        let mut file_name = String::from(name);
+        file_name.push_str(DEFAULT_SUFFIX);
+        if let Ok(table) = super::Parser::get_table_with_id(&file_name, "Template") {
+            let mut fk_map = self.fk_map.borrow_mut();
+            let mut fks = HashMap::<Rc<String>, Rc<String>>::default();
+            let height = table.height();
+            for row in DATA_START_ROW..height - 1 {
+                if let Some(val) = table.cell(0, row) {
+                    fks.insert(Rc::from((row - DATA_START_ROW).to_string()), val.clone());
+                    fks.insert(val.clone(), Rc::from((row - DATA_START_ROW).to_string()));
+                }
+            }
+            fk_map.insert(name, fks);
         } else {
             println!("read_fk_table: {} failed", name);
         }

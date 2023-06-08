@@ -366,7 +366,7 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                 let off = find_block(&slice_val[idx..]);
                 if off != 0 {
                     arr.push(CellValue::DCustom(CustomValue(ty.clone(), Rc::from(String::from(&slice_val[idx..idx+off])))));
-                    idx += off;
+                    idx += off + 1;
                 } else {
                     break;
                 }
