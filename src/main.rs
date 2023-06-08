@@ -12,8 +12,7 @@ fn main() {
     let mut parser = Parser::new();
     let ret = parser.read_file("Animal.xlsx");
 
-    if let Ok(_) = ret {
-    } else if let Err(e) = ret {
+    if let Err(e) = ret {
         println!("{}", e);
     }
 

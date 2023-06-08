@@ -130,23 +130,35 @@ impl Parser {
     }
 
     pub fn read_file(&mut self, file_name: &str) -> Result<()> {
-        let file = ExcelFile::load_from_path(file_name);
         self.item_class.name = String::from(file_name);
         self.item_class.name.remove_matches(".xlsx");
         self.base_class.name = String::from(file_name);
         self.base_class.name.remove_matches(".xlsx");
+        let table = Self::get_table_with_id(file_name, "Template")?;
+        self.parse_template(table);
+        Ok(())
+    }
 
+    pub fn generate(&self, end: &'static str) -> String {
+        self.gen_code(end, 0)
+    }
+
+    pub(crate) fn get_table_with_id(file_name: &str, sheet: &str) -> Result<ExcelTable> {
+        let file = ExcelFile::load_from_path(file_name);
         if let Ok(mut ff) = file {
-            if let Ok(ret) = ff.parse_workbook() {
-                for (name, id) in ret.into_iter() {
-                    println!("{}, {}", name, id);
-
-                    let content = ff.parse_sheet(*id);
-                    if let Ok(table) = content {
-                        if name == "Template" {
-                            self.parse_template(table);
+            match ff.parse_workbook() {
+                Ok(ret) => {
+                    for (name, id) in ret.into_iter() {
+                        if name == sheet {
+                            if let Ok(table) = ff.parse_sheet(*id) {
+                                return Ok(table);
+                            }
                         }
                     }
+                    return Err(Error::new(ErrorKind::Other, "sheet not found"));
+                },
+                Err(e) => {
+                    return Err(Error::new(ErrorKind::Other, e));
                 }
             }
         } else if let Err(e) = file {
@@ -154,12 +166,6 @@ impl Parser {
         } else {
             return Err(Error::new(ErrorKind::Other, "load from xlsx file failed"));
         }
-
-        Ok(())
-    }
-
-    pub fn generate(&self, end: &'static str) -> String {
-        self.gen_code(end, 0)
     }
 
     //------------------------private---------------------------------
