@@ -177,7 +177,7 @@ impl Parser {
         // parse FK
         let mut fk_data = Vec::<RawValData>::default();
         for col in 0..width {
-            if let Some(v) = table.cell(col, DATA_FOREIGN_KEY_ROW) {
+            if let (Some(v), Some(ty)) = (table.cell(col, DATA_FOREIGN_KEY_ROW), table.cell(col, DATA_TYPE_ROW)) {
                 if v.starts_with('*') {
                     let mut vals: Vec<&str> = Vec::default();
                     for idx in DATA_DEFAULT_ROW..height-1 {
@@ -189,7 +189,7 @@ impl Parser {
                             vals.push("");
                         }
                     }
-                    fk_data.push((col, (&v[1..], vals)));
+                    fk_data.push((col, (&v[1..], vals, CellValue::get_type(ty))));
                 }
             }
         }

@@ -229,6 +229,85 @@ impl CellValue {
         }
     }
 
+    pub fn get_type(ty: &Rc<String>) -> Self {
+        match ty.as_str() {
+            "int" => Self::DInt(IntValue::default()),
+            "uint" => Self::DUInt(UIntValue::default()),
+            "bool" => Self::DBool(BoolValue::default()),
+            "byte" => Self::DByte(ByteValue::default()),
+            "sbyte" => Self::DSByte(SByteValue::default()),
+            "short" => Self::DShort(ShortValue::default()),
+            "ushort" => Self::DUShort(UShortValue::default()),
+            "string" => Self::DString(StringValue::default()),
+            "LString" => Self::DLString(LStringValue::default()),
+            // array or list
+            s if s.contains("List") || s.contains("[]") => {
+                let mut char_stack: Stack<char> = Stack::new();
+                let mut op_stack: Stack<char> = Stack::new();
+                let mut keyword_stack: Stack<String> = Stack::new();
+                let mut ret = Self::DNone(NoneValue);
+
+                let take_keyword = |st: &mut Stack<char>| -> String {
+                    let mut s = String::with_capacity(10);
+                    while !st.is_empty() {
+                        if let Ok(r) = st.pop() {
+                            s.push(r)
+                        }
+                    }
+                    s.chars().rev().collect()
+                };
+
+                for c in ty.chars() {
+                    match c {
+                        ']' => {
+                            if let Ok(key) = keyword_stack.pop() {
+                                if let Ok(top) = op_stack.pop() {
+                                    if top == '[' {
+                                        ret = Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)]));
+                                    }
+                                }
+                            }
+                        }
+                        '>' => {
+                            if char_stack.is_empty() {
+                                if let Ok(key) = keyword_stack.pop() {
+                                    if let Ok(top) = op_stack.pop() {
+                                        if top == '<' && key == "List" {
+                                            ret = Self::DList(ListValue(vec![ret]));
+                                        }
+                                    }
+                                }
+                            } else {
+                                let _ = op_stack.pop();
+                                let inner_keyword = take_keyword(&mut char_stack);
+                                ret = Self::basic_default_value(&inner_keyword);
+                                ret = Self::DList(ListValue(vec![ret]));
+                            }
+                        }
+                        '[' | '<' => {
+                            op_stack.push(c);
+                            keyword_stack.push(take_keyword(&mut char_stack));
+                        }
+                        c => {
+                            char_stack.push(c);
+                        }
+                    }
+                }
+                
+                if op_stack.is_empty() {
+                    ret
+                } else {
+                    // TODO: err
+                    Self::DNone(NoneValue)
+                }
+            },
+            // custom
+            s => {
+                Self::DCustom(CustomValue(Rc::from(String::from(s)), Rc::default()))
+            }
+        }
+    }
+
     //--------------------------------internal---------------------------------------------
     
     fn get_basic_type_string(&self) -> String {
@@ -264,7 +343,6 @@ impl CellValue {
         }
     }
 
-    #[allow(dead_code)]
     fn clone_from_other_with_default(v: &CellValue) -> CellValue {
         match v {
             CellValue::DBool(_) => {
@@ -316,8 +394,7 @@ impl CellValue {
     }
 }
 
-#[allow(dead_code)]
-fn find_block(src: &str) -> usize {
+pub fn find_block(src: &str) -> usize {
     let mut st: Stack<char> = Stack::new();
 
     if let Some(start_idx) = src.find('{') {
@@ -478,18 +555,43 @@ pub trait ValueInfo {
     // used by array/list code
     fn ty(&self) -> String;
 }
-pub struct BoolValue(bool);
-pub struct LStringValue(Rc<String>, usize);
-pub struct StringValue(Rc<String>);
-pub struct CustomValue(Rc<String>, Rc<String>); // (type_str, params)
-pub struct ShortValue(i16);
-pub struct UShortValue(u16);
-pub struct IntValue(i32);
-pub struct UIntValue(u32);
-pub struct ByteValue(u8);
-pub struct SByteValue(i8);
-pub struct ArrayValue(Vec<CellValue>);
-pub struct ListValue(Vec<CellValue>);
+#[derive(Default)]
+pub struct BoolValue(pub bool);
+
+#[derive(Default)]
+pub struct LStringValue(pub Rc<String>, pub usize);
+
+#[derive(Default)]
+pub struct StringValue(pub Rc<String>);
+
+#[derive(Default)]
+pub struct CustomValue(pub Rc<String>, pub Rc<String>); // (type_str, params)
+
+#[derive(Default)]
+pub struct ShortValue(pub i16);
+
+#[derive(Default)]
+pub struct UShortValue(pub u16);
+
+#[derive(Default)]
+pub struct IntValue(pub i32);
+
+#[derive(Default)]
+pub struct UIntValue(pub u32);
+
+#[derive(Default)]
+pub struct ByteValue(pub u8);
+
+#[derive(Default)]
+pub struct SByteValue(pub i8);
+
+#[derive(Default)]
+pub struct ArrayValue(pub Vec<CellValue>);
+
+#[derive(Default)]
+pub struct ListValue(pub Vec<CellValue>);
+
+#[derive(Default)]
 pub struct NoneValue;
 
 //----------------------------------impl-------------------------------------------
