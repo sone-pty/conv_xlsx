@@ -72,12 +72,12 @@ impl<'a> FKValue<'a> {
 
         if is_simple_pattern(pattern) {
             let mut ch_stack = Stack::<char>::new();
+            let base_name = pattern.chars().filter(|c| *c != '{' && *c != '}').collect::<String>();
 
             if !self.fk_map.borrow().contains_key(pattern) {
-                let base_name = pattern.chars().filter(|c| *c != '{' && *c != '}').collect();
-                self.read_fk_table(base_name);
+                self.read_fk_table(base_name.clone());
             }
-            if let Some(fks) = self.fk_map.borrow().get(pattern) {
+            if let Some(fks) = self.fk_map.borrow().get(&base_name) {
                 for v in rval.chars() {
                     match v {
                         '{' => { rs.push(v); },

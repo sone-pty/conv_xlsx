@@ -451,6 +451,7 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
         } else {
             let elements: Vec<&str> = filter_val[1..filter_val.len()-1].split(',').collect();
             for e in elements {
+                if e.is_empty() { continue; }
                 // match type, assert arr is not empty
                 match arr[0] {
                     CellValue::DBool(_) => {
