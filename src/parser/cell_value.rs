@@ -714,7 +714,12 @@ impl ValueInfo for CustomValue {
         let mut ret = String::from("new ");
         ret.push_str(self.0.as_str());
         ret.push('(');
-        ret.push_str(&self.1.as_str()[1..self.1.len() - 1]);
+        for v in self.1.as_str()[1..self.1.len()-1].chars() {
+            match v {
+                '{' => { ret.push_str("new []{"); },
+                _ => { ret.push(v); }
+            }
+        }
         ret.push(')');
         ret
     }

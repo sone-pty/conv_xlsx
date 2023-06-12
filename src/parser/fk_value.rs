@@ -191,7 +191,7 @@ impl<'a> FKValue<'a> {
                     let item_pattern = &pattern[1..pattern.len()-1].chars().filter(|c| *c != ' ').collect::<String>();
                     let indexs = item_pattern.split(',').collect::<Vec<&str>>();
                     let mut cnt = 0;
-                    
+            
                     for v in indexs.iter() {
                         if !v.is_empty() && !self.fk_map.borrow().contains_key(*v) {
                             self.read_fk_table(String::from(*v));
@@ -213,16 +213,57 @@ impl<'a> FKValue<'a> {
                                 cnt += 1;
                                 dest.push(v);
                             },
-                            _ => {
-                                ch_stack.push(v);
-                            }
+                            _ => { ch_stack.push(v); }
                         }
                     }
                 },
                 CellValue::DCustom(_) => {
+                    let item_pattern = &pattern[2..pattern.len()-2].chars().filter(|c| *c != ' ').collect::<String>();
+                    let indexs = item_pattern.split(',').collect::<Vec<&str>>();
+                    let mut cnt = 0;
+            
+                    for v in indexs.iter() {
+                        if !v.is_empty() && !self.fk_map.borrow().contains_key(*v) {
+                            self.read_fk_table(String::from(*v));
+                        }
+                    }
 
+                    let mut braces = 0;
+                    for v in val.chars() {
+                        match v {
+                            '{' => { dest.push(v); braces += 1; },
+                            '}' | ',' => {
+                                if braces < 3 {
+                                    if braces == 1 && v == ',' { dest.push(v); continue; }
+                                    if cnt >= indexs.len() {
+                                        cnt = indexs.len() - 1;
+                                    }
+
+                                    if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
+                                        take_and_replace_value(&mut ch_stack, dest, fks);
+                                    } else if indexs[cnt].is_empty() {
+                                        dest.push_str(&take_value(&mut ch_stack));
+                                    }
+
+                                    if v == '}' {
+                                        braces -= 1; 
+                                        cnt = 0;
+                                    } else {
+                                        cnt += 1;
+                                    }
+                                } else if v == '}' { 
+                                    dest.push_str(&take_value(&mut ch_stack)); 
+                                    braces -= 1; 
+                                } else { 
+                                    dest.push_str(&take_value(&mut ch_stack)); 
+                                }
+                                dest.push(v);
+                            },
+                            _ => { ch_stack.push(v); }
+                        }
+                    }
                 },
-                _ => {todo!("err")}
+                _ => { todo!("err") }
             }
         };
 
