@@ -66,25 +66,6 @@ impl<'a> FKValue<'a> {
 
     //----------------------------private-------------------------------
     fn parse_internal(&'a self, val: &'a str, pattern: &'a str, col: &'a usize, ty: &'a CellValue) {
-        let take_and_replace_value = |st: &mut Stack<char>, dest: &mut String, fks: &HashMap<Rc<String>, Rc<String>>| {
-            let mut s = String::with_capacity(10);
-            while !st.is_empty() {
-                if let Ok(r) = st.pop() {
-                    s.push(r)
-                }
-            }
-
-            let rev: String = s.chars().rev().collect();
-            if !rev.is_empty() {
-                if let Some(vv) = fks.get(&rev) {
-                    dest.push_str(vv);
-                } else {
-                    // TODO
-                    dest.push_str("-1");
-                }
-            }
-        };
-
         let rval = val.chars().filter(|c| *c != ' ').collect::<String>();
         // new value
         let mut rs = String::default();
@@ -116,7 +97,7 @@ impl<'a> FKValue<'a> {
                 todo!("err")
             }
         } else if pattern.contains('?') || pattern.contains('#') {
-
+            self.format_value_1(ty, pattern, &rval, &mut rs);
         } else {
             self.format_value_2(ty, pattern, &rval, &mut rs);
         }
@@ -151,40 +132,122 @@ impl<'a> FKValue<'a> {
         }
     }
 
+    fn format_value_1(&self, ty: &CellValue, pattern: &str, val: &str, rs: &mut String) {
+        // handle with custom objects
+        let push_basic_value = |ty: &CellValue, dest: &mut String| {
+            match ty {
+                CellValue::DCustom(_) => {
+                    let item_pattern = &pattern[2..pattern.len()-2].chars().filter(|c| *c != ' ').collect::<String>();
+                    let indexs = item_pattern.split(',').collect::<Vec<&str>>();
+                    let mut idx = 1;
+                    let mut fk_names = Vec::<String>::with_capacity(1);
+
+                    while idx < val.len() - 1 {
+                        let off = super::cell_value::find_block(&val[idx..]);
+                        
+                        if off != 0 {
+                            dest.push('{');
+                            let val_str = val[idx+1..idx+off-1].chars().filter(|c| *c != ' ').collect::<String>();
+                            let vals = split_value(&val_str);
+                            let mut cnt = 0;
+
+                            // get fks, assert len of vals >= len of indexs
+                            for v in indexs.iter() {
+                                if v.starts_with('?') {
+                                    if v.len() == 1 {
+                                        fk_names.push(String::from(&vals[cnt]));
+                                    } else {
+                                        if let Ok(num) = v[1..].parse::<usize>() {
+                                            if fk_names.capacity() < num {
+                                                fk_names.reserve(num << 1);
+                                                unsafe {fk_names.set_len(num << 1); }
+                                            }
+                                            fk_names[num] = String::from(&vals[cnt]);
+                                        } else {
+                                            println!("parse from {} to usize failed", &v[1..]);
+                                        }
+                                    }
+
+                                    if !vals[cnt].is_empty() && !self.fk_map.borrow().contains_key(&vals[cnt]) {
+                                        self.read_fk_table(String::from(&vals[cnt][1..vals[cnt].len()-1]));
+                                    }
+                                }
+                                cnt += 1;
+                            }
+
+                            cnt = 0;
+                            // push str
+                            for v in vals.iter() {
+                                if cnt > indexs.len() { cnt = indexs.len()-1; }
+                                if indexs[cnt].starts_with('?') { // push table name
+                                    dest.push_str(v);
+                                } else if indexs[cnt].starts_with('#') { // push val in fks
+                                    let mut id = 0;
+                                    if indexs[cnt].len() > 1 {
+                                        if let Ok(num) = indexs[cnt][1..].parse::<usize>() {
+                                            id = num;
+                                        } else {
+                                            println!("parse from {} to usize failed", &indexs[cnt][1..]);
+                                        }
+                                    }
+
+                                    // assert id is in the [0..fk_names.len()]
+                                    if let Some(fks) = self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]) {
+                                        if let Some(vv) = fks.get(&String::from(v)) {
+                                            dest.push_str(vv);
+                                        }
+                                    } else {
+                                        println!("cant find the fks by the keyname = {}", &fk_names[id]);
+                                    }
+                                } else { // push original val
+                                    dest.push_str(v);
+                                }
+                                cnt += 1;
+                                dest.push(',');
+                            }
+
+                            if dest.ends_with(',') { dest.remove(dest.len()-1); }
+                            dest.push('}');
+                        } else {
+                            break;
+                        }
+
+                        dest.push(',');
+                        idx += off + 1; // skip ','
+                    }
+
+                    if dest.ends_with(',') { dest.remove(dest.len()-1); }
+                },
+                _ => { todo!("err") }
+            }
+        };
+
+        match ty {
+            CellValue::DArray(arr) => {
+                rs.push('{');
+                push_basic_value(&arr.0[0], rs);
+                rs.push('}');
+            },
+            CellValue::DList(ref lst) => {
+                rs.push('{');
+                match &lst.0[0] {
+                    CellValue::DList(_) | CellValue::DArray(_) => {},
+                    CellValue::DCustom(_) => { push_basic_value(&lst.0[0], rs); },
+                    _ => {}
+                }
+                rs.push('}');
+            },
+            CellValue::DCustom(_) => {
+
+            },
+            _ => { todo!("err") }
+        }
+    }
+
     fn format_value_2(&self, ty: &CellValue, pattern: &str, val: &str, rs: &mut String) 
     {
         let mut ch_stack = Stack::<char>::new();
-        
-        let take_and_replace_value = |st: &mut Stack<char>, dest: &mut String, fks: &HashMap<Rc<String>, Rc<String>>| {
-            let mut s = String::with_capacity(10);
-            while !st.is_empty() {
-                if let Ok(r) = st.pop() {
-                    s.push(r)
-                }
-            }
-
-            let rev: String = s.chars().rev().collect();
-            if !rev.is_empty() {
-                if let Some(vv) = fks.get(&rev) {
-                    dest.push_str(vv);
-                } else {
-                    // TODO
-                    dest.push_str("-1");
-                }
-            }
-        };
-
-        let take_value = |st: &mut Stack<char>| -> String {
-            let mut s = String::with_capacity(10);
-            while !st.is_empty() {
-                if let Ok(r) = st.pop() {
-                    s.push(r)
-                }
-            }
-            s.chars().rev().collect()
-        };
-
-        let mut push_basic_value = |ty: &CellValue, dest: &mut String| {
+        let mut push_basic_value = |ty: &CellValue, dest: &mut String, is_arr: bool| {
             match ty {
                 CellValue::DInt(_) | CellValue::DByte(_) | CellValue::DSByte(_) | 
                 CellValue::DShort(_) | CellValue::DUInt(_) | CellValue::DUShort(_) => {
@@ -218,7 +281,7 @@ impl<'a> FKValue<'a> {
                     }
                 },
                 CellValue::DCustom(_) => {
-                    let item_pattern = &pattern[2..pattern.len()-2].chars().filter(|c| *c != ' ').collect::<String>();
+                    let item_pattern = &pattern[(if is_arr {2} else {1})..pattern.len()-(if is_arr {2} else {1})].chars().filter(|c| *c != ' ').collect::<String>();
                     let indexs = item_pattern.split(',').collect::<Vec<&str>>();
                     let mut cnt = 0;
             
@@ -233,8 +296,8 @@ impl<'a> FKValue<'a> {
                         match v {
                             '{' => { dest.push(v); braces += 1; },
                             '}' | ',' => {
-                                if braces < 3 {
-                                    if braces == 1 && v == ',' { dest.push(v); continue; }
+                                if braces < (if is_arr {3} else {2}) {
+                                    if braces == (if is_arr {1} else {0}) && v == ',' { dest.push(v); continue; }
                                     if cnt >= indexs.len() {
                                         cnt = indexs.len() - 1;
                                     }
@@ -269,7 +332,7 @@ impl<'a> FKValue<'a> {
 
         match ty {
             CellValue::DArray(ref arr) => {
-                push_basic_value(&arr.0[0], rs);
+                push_basic_value(&arr.0[0], rs, true);
             },
             CellValue::DList (ref lst) => {
                 match &lst.0[0] {
@@ -291,10 +354,11 @@ impl<'a> FKValue<'a> {
                         }
                         rs.push('}');
                     },
-                    ty => { push_basic_value(ty, rs); }
+                    ty => { push_basic_value(ty, rs, true); }
                 }
             },
-            _ => {}
+            CellValue::DCustom(_) => { push_basic_value(ty, rs, false); },
+            _ => { todo!("err") }
         }
     }
 }
@@ -302,4 +366,66 @@ impl<'a> FKValue<'a> {
 fn is_simple_pattern(s: &str) -> bool {
     s.chars().all(|c| c.is_alphanumeric()) ||
     s.chars().filter(|c| *c != '{' && *c != '}').all(|c| c.is_alphanumeric())
+}
+
+fn take_value(st: &mut Stack<char>) -> String {
+    let mut s = String::with_capacity(10);
+    while !st.is_empty() {
+        if let Ok(r) = st.pop() {
+            s.push(r)
+        }
+    }
+    s.chars().rev().collect()
+}
+
+fn take_and_replace_value(st: &mut Stack<char>, dest: &mut String, fks: &HashMap<Rc<String>, Rc<String>>) {
+    let mut s = String::with_capacity(10);
+    while !st.is_empty() {
+        if let Ok(r) = st.pop() {
+            s.push(r)
+        }
+    }
+
+    let rev: String = s.chars().rev().collect();
+    if !rev.is_empty() {
+        if let Some(vv) = fks.get(&rev) {
+            dest.push_str(vv);
+        } else {
+            // TODO
+            dest.push_str("-1");
+        }
+    }
+}
+
+fn split_value(val: &str) -> Vec<String> {
+    let mut ch_stack = Stack::<char>::new();
+    let mut ret = Vec::<String>::default();
+    let mut is_bracket = false;
+
+    for v in val.chars() {
+        match v {
+            '{' => {
+                ch_stack.push(v);
+                is_bracket = true;
+            },
+            ',' => {
+                if is_bracket { 
+                    ch_stack.push(v);
+                } else {
+                    ret.push(take_value(&mut ch_stack));
+                }
+            },
+            '}' => {
+                ch_stack.push(v);
+                ret.push(take_value(&mut ch_stack));
+                is_bracket = false;
+            },
+            _ => { ch_stack.push(v); }
+        }
+    }
+
+    if ret[ret.len()-1].is_empty() { ret.remove(ret.len()-1); }
+    if !ch_stack.is_empty() { ret.push(take_value(&mut ch_stack)); }
+
+    ret
 }
