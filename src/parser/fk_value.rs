@@ -134,12 +134,12 @@ impl<'a> FKValue<'a> {
 
     fn format_value_1(&self, ty: &CellValue, pattern: &str, val: &str, rs: &mut String) {
         // handle with custom objects
-        let push_basic_value = |ty: &CellValue, dest: &mut String| {
+        let push_basic_value = |ty: &CellValue, dest: &mut String, is_arr: bool| {
             match ty {
                 CellValue::DCustom(_) => {
-                    let item_pattern = &pattern[2..pattern.len()-2].chars().filter(|c| *c != ' ').collect::<String>();
+                    let item_pattern = &pattern[(if is_arr {2} else {1})..pattern.len()-(if is_arr {2} else {1})].chars().filter(|c| *c != ' ').collect::<String>();
                     let indexs = item_pattern.split(',').collect::<Vec<&str>>();
-                    let mut idx = 1;
+                    let mut idx = if is_arr {1} else {0};
                     let mut fk_names = Vec::<String>::with_capacity(1);
 
                     while idx < val.len() - 1 {
@@ -178,7 +178,7 @@ impl<'a> FKValue<'a> {
                             cnt = 0;
                             // push str
                             for v in vals.iter() {
-                                if cnt > indexs.len() { cnt = indexs.len()-1; }
+                                if cnt >= indexs.len() { cnt = indexs.len()-1; }
                                 if indexs[cnt].starts_with('?') { // push table name
                                     dest.push_str(v);
                                 } else if indexs[cnt].starts_with('#') { // push val in fks
@@ -225,20 +225,20 @@ impl<'a> FKValue<'a> {
         match ty {
             CellValue::DArray(arr) => {
                 rs.push('{');
-                push_basic_value(&arr.0[0], rs);
+                push_basic_value(&arr.0[0], rs, true);
                 rs.push('}');
             },
             CellValue::DList(ref lst) => {
                 rs.push('{');
                 match &lst.0[0] {
                     CellValue::DList(_) | CellValue::DArray(_) => {},
-                    CellValue::DCustom(_) => { push_basic_value(&lst.0[0], rs); },
+                    CellValue::DCustom(_) => { push_basic_value(&lst.0[0], rs, true); },
                     _ => {}
                 }
                 rs.push('}');
             },
             CellValue::DCustom(_) => {
-
+                push_basic_value(ty, rs, false);
             },
             _ => { todo!("err") }
         }
