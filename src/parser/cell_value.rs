@@ -68,7 +68,7 @@ impl CellValue {
                     Self::DSByte(SByteValue(0))
                 }
             }
-            "LString" | "Lstring" | "lstring" => {
+            "LString" | "Lstring" => {
                 let ls_data = ls_map.as_ref().borrow();
                 if ls_data.contains_key(val) {
                     Self::DLString(LStringValue(val.clone(), ls_data[val]))
@@ -239,7 +239,7 @@ impl CellValue {
             "short" => Self::DShort(ShortValue::default()),
             "ushort" => Self::DUShort(UShortValue::default()),
             "string" => Self::DString(StringValue::default()),
-            "LString" => Self::DLString(LStringValue::default()),
+            "LString" | "Lstring" => Self::DLString(LStringValue::default()),
             // array or list
             s if s.contains("List") || s.contains("[]") => {
                 let mut char_stack: Stack<char> = Stack::new();
@@ -332,7 +332,7 @@ impl CellValue {
             "short" => CellValue::DShort(ShortValue(0)),
             "ushort" => CellValue::DUShort(UShortValue(0)),
             "string" => CellValue::DString(StringValue(Rc::default())),
-            "LString" => CellValue::DLString(LStringValue(Rc::default(), usize::default())),
+            "LString" | "Lstring" => CellValue::DLString(LStringValue(Rc::default(), usize::default())),
             "int" => CellValue::DInt(IntValue(0)),
             "uint" => CellValue::DUInt(UIntValue(0)),
             "sbyte" => CellValue::DSByte(SByteValue(0)),

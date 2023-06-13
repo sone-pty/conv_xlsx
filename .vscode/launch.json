@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["Merchant", "b"],
+            "args": ["EnemyNest", "b"],
             "cwd": "${workspaceFolder}"
         }
     ]

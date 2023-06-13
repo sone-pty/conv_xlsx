@@ -90,7 +90,7 @@ impl CodeGenerator for ItemClass {
                         format(tab_nums + 1, &mut code);
                         code.push_str("public readonly ");
                         let s = item_type.clone().as_ref().clone();
-                        code.push_str(&s.replace("LString", "string"));
+                        code.push_str(&replace_lstring(&s));
                         code.push(' ');
 
                         let cell_ident = map_vars.get(item_identify).unwrap();
@@ -199,4 +199,35 @@ impl CodeGenerator for ItemClass {
 
         code
     }
+}
+
+fn replace_lstring(val: &str) -> String {
+    let mut ret = String::with_capacity(val.len());
+    let indexs_1 = super::bm_search::bm_search(val, "LString");
+    let indexs_2 = super::bm_search::bm_search(val, "Lstring");
+
+    if indexs_1.is_empty() && indexs_2.is_empty() {
+        return String::from(val);
+    } else if indexs_1.is_empty() {
+        if indexs_2[0] == 0 {
+            ret.push_str("string");
+            ret.push_str(&val[7..]);
+        } else {
+            ret.push_str(&val[..indexs_2[0]]);
+            ret.push('s');
+            ret.push_str(&val[indexs_2[0]+2..]);
+        }
+    } else if indexs_2.is_empty() {
+        if indexs_1[0] == 0 {
+            ret.push_str("string");
+            ret.push_str(&val[7..]);
+        } else {
+            ret.push_str(&val[..indexs_1[0]]);
+            ret.push('s');
+            ret.push_str(&val[indexs_1[0]+2..]);
+        }
+    } else {
+        unreachable!()
+    }
+    ret
 }

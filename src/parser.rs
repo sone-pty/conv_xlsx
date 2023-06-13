@@ -24,6 +24,7 @@ mod cell_value;
 mod fk_value;
 
 mod stack;
+mod bm_search;
 
 type LSMap = Rc<RefCell<HashMap<Rc<String>, usize>>>;
 
@@ -226,8 +227,8 @@ impl Parser {
         let mut ls_cols: Vec<(usize, bool)> = Vec::default();
         for col in 0..width {
             if let Some(v) = table.cell(col, DATA_TYPE_ROW) {
-                if v.contains("LString") {
-                    if v.as_ref() == "LString" {
+                if v.contains("LString") || v.contains("Lstring") {
+                    if v.as_ref() == "LString" || v.as_ref() == "Lstring" {
                         ls_cols.push((col, true))
                     } else {
                         ls_cols.push((col, false))
@@ -252,7 +253,8 @@ impl Parser {
 
         for col in (0..width).filter(|x| !self.skip_cols.contains(x)) {
             let ident = table.cell(col, DATA_IDENTIFY_ROW).unwrap();
-            let ty = convert_type(table.cell(col, DATA_TYPE_ROW).unwrap().clone());
+            let mut ty = table.cell(col, DATA_TYPE_ROW).unwrap().clone();
+            convert_type(Rc::make_mut(&mut ty));
 
             // collect (comment, identify, type) in row (1, 3, 4)
             if let Some(c1) = table.cell(col, DATA_COMMENT_ROW) {
@@ -366,22 +368,18 @@ impl Parser {
     }
 }
 
-fn convert_type(mut v: Rc<String>) -> Rc<String> {
-    if let Some(s) = Rc::get_mut(&mut v) {
-        // convert array
-        if let Some(idx) = s.find('[') {
-            let mut n = idx;
-            while let Some(c) = s.chars().nth(n) {
-                if c == ']' {
-                    break;
-                } else {
-                    n = n + 1;
-                }
+fn convert_type(v: &mut String) {
+    if let Some(idx) = v.find('[') {
+        let mut n = idx;
+        while let Some(c) = v.chars().nth(n) {
+            if c == ']' {
+                break;
+            } else {
+                n = n + 1;
             }
-            s.replace_range(idx + 1..n, "");
         }
+        v.replace_range(idx + 1..n, "");
     }
-    v
 }
 
 pub fn find_file<P: AsRef<Path>>(dir: P, filename: &str) -> PathBuf {
