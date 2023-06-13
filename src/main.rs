@@ -2,7 +2,7 @@
 
 mod defs;
 use defs::{
-    OUTPUT_PATH, 
+    OUTPUT_DIR, 
     SOURCE_XLSXS_DIR, 
     DEFAULT_SOURCE_SUFFIX, 
     DEFAULT_DEST_SUFFIX
@@ -15,9 +15,10 @@ use args::Args;
 use clap::Parser;
 
 use std::fs::File;
-use std::{io::Write, path::PathBuf};
+use std::fs;
+use std::io::Write;
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let args = Args::parse();
 
     match args.command {
@@ -36,14 +37,22 @@ fn main() {
             }
 
             let code = parser.generate("\r\n");
-            let mut output_path = PathBuf::from(OUTPUT_PATH);
-            output_path.push(base_name);
-            output_path.set_extension(DEFAULT_DEST_SUFFIX);
-            let mut file = File::create(output_path.as_path()).unwrap();
-            file.write_all(code.as_bytes()).unwrap();
+
+            if let Err(_) = fs::metadata(OUTPUT_DIR) {
+                fs::create_dir_all(OUTPUT_DIR)?;
+            }
+
+            let output_path = format!("{}/{}.{}", OUTPUT_DIR, base_name, DEFAULT_DEST_SUFFIX);
+            if let Ok(mut file) = File::create(&output_path) {
+                file.write_all(code.as_bytes())?;
+            } else {
+                println!("open file: {} failed", &output_path);
+            }
+            Ok(())
         },
         args::Command::Clean => {
-            todo!()
+            fs::remove_dir_all(OUTPUT_DIR)?;
+            Ok(())
         },
     }
 }
