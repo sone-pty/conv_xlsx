@@ -74,14 +74,14 @@ impl<'a> FKValue<'a> {
             let mut ch_stack = Stack::<char>::new();
             let base_name = pattern.chars().filter(|c| *c != '{' && *c != '}').collect::<String>();
 
-            if !self.fk_map.borrow().contains_key(pattern) {
+            if !self.fk_map.borrow().contains_key(&base_name) {
                 self.read_fk_table(base_name.clone());
             }
             if let Some(fks) = self.fk_map.borrow().get(&base_name) {
                 for v in rval.chars() {
                     match v {
                         '{' => { rs.push(v); },
-                        '}' | ',' => {
+                        '}' | ',' | '，'=> {
                             take_and_replace_value(&mut ch_stack, &mut rs, fks);
                             rs.push(v);
                         },
