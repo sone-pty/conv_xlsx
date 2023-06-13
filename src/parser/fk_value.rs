@@ -169,7 +169,7 @@ impl<'a> FKValue<'a> {
                                         }
                                     }
 
-                                    if !vals[cnt].is_empty() && !self.fk_map.borrow().contains_key(&vals[cnt]) {
+                                    if !vals[cnt].is_empty() && !self.fk_map.borrow().contains_key(&vals[cnt][1..vals[cnt].len()-1]) {
                                         self.read_fk_table(String::from(&vals[cnt][1..vals[cnt].len()-1]));
                                     }
                                 }
