@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 #[command(version, about)]
 pub struct Args {
     /// Name of the xlsx file
-    #[arg(default_value_t = String::from("test"))]
+    #[arg(default_value_t = String::from(""))]
     pub name: String,
     #[command(subcommand)]
     pub command: Command,
