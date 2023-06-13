@@ -5,6 +5,8 @@ use std::{
     io::{Error, ErrorKind, Result},
     rc::Rc, path::Path,
 };
+use std::path::PathBuf;
+use std::fs;
 use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
 
 use item_class::ItemClass;
@@ -380,4 +382,27 @@ fn convert_type(mut v: Rc<String>) -> Rc<String> {
         }
     }
     v
+}
+
+pub fn find_file<P: AsRef<Path>>(dir: P, filename: &str) -> PathBuf {
+    let dir = dir.as_ref();
+
+    if let Ok(rdir) = fs::read_dir(dir) {
+        for entry in rdir {
+            if let Ok(e) = entry {
+                let path = e.path();
+                if path.is_dir() {
+                    let ret = find_file(&path, filename);
+                    if ret.is_file() {
+                        return ret;
+                    }
+                } else if path.file_name().and_then(|name| name.to_str()) == Some(filename) {
+                    return path.to_path_buf()
+                }
+            }
+        }
+        PathBuf::default()
+    } else {
+        PathBuf::default()
+    }
 }

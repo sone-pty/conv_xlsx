@@ -14,13 +14,13 @@ use std::fs::File;
 use std::{io::Write, path::PathBuf};
 
 fn main() {
-    let base_name = "Animal";
-    let mut xlsxs_path = PathBuf::from(SOURCE_XLSXS_DIR);
-    xlsxs_path.push(base_name);
-    xlsxs_path.set_extension(DEFAULT_SOURCE_SUFFIX);
+    let mut base_name = String::from("Carrier");
+    base_name.push('.');
+    base_name.push_str(DEFAULT_SOURCE_SUFFIX);
+    let xlsx_path = parser::find_file(SOURCE_XLSXS_DIR, &base_name);
 
     let mut parser = parser::Parser::new();
-    let ret = parser.read_file(base_name, xlsxs_path);
+    let ret = parser.read_file(&base_name, xlsx_path);
 
     if let Err(e) = ret {
         println!("{}", e);

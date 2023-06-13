@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -94,7 +94,7 @@ impl<'a> FKValue<'a> {
                     take_and_replace_value(&mut ch_stack, &mut rs, fks);
                 }
             } else {
-                todo!("err")
+                println!("cant find fk table: {}.xlsx", &base_name);
             }
         } else if pattern.contains('?') || pattern.contains('#') {
             self.format_value_1(ty, pattern, &rval, &mut rs);
@@ -110,11 +110,12 @@ impl<'a> FKValue<'a> {
         let nvals = outvals_mut.get_mut(col).unwrap();
         nvals.push(rs);
     }
-
+    
     fn read_fk_table(&self, name: String) {
-        let mut xlsxs_path = PathBuf::from(SOURCE_XLSXS_DIR);
-        xlsxs_path.push(&name);
-        xlsxs_path.set_extension(DEFAULT_SOURCE_SUFFIX);
+        let mut file_name = String::from(&name);
+        file_name.push('.');
+        file_name.push_str(DEFAULT_SOURCE_SUFFIX);
+        let xlsxs_path = super::find_file(SOURCE_XLSXS_DIR, &file_name);
 
         if let Ok(table) = super::Parser::get_table_with_id(xlsxs_path, "Template") {
             let mut fk_map = self.fk_map.borrow_mut();
