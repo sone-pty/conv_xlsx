@@ -68,7 +68,7 @@ impl CellValue {
                     Self::DSByte(SByteValue(0))
                 }
             }
-            "LString" => {
+            "LString" | "Lstring" | "lstring" => {
                 let ls_data = ls_map.as_ref().borrow();
                 if ls_data.contains_key(val) {
                     Self::DLString(LStringValue(val.clone(), ls_data[val]))
