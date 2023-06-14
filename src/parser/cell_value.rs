@@ -46,9 +46,9 @@ impl CellValue {
 
         match ty_str {
             "bool" => {
-                if val_str == "0" {
+                if val_str == "0" || val_str == "false" || val_str == "FALSE" {
                     Self::DBool(BoolValue(false))
-                } else if val_str == "1" {
+                } else if val_str == "1" || val_str == "true" || val_str == "TRUE" {
                     Self::DBool(BoolValue(true))
                 } else {
                     todo!()
@@ -457,8 +457,14 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                 // match type, assert arr is not empty
                 match arr[0] {
                     CellValue::DBool(_) => {
-                        if let Err(err) = e.parse::<bool>().map(|v| arr.push(CellValue::DBool( BoolValue(v) ))) {
-                            println!("{}: src val= {}", err, e);
+                        if e == "0" {
+                            arr.push(CellValue::DBool( BoolValue(false) ));
+                        } else if e == "1" {
+                            arr.push(CellValue::DBool( BoolValue(true) ));
+                        } else {
+                            if let Err(err) = e.parse::<bool>().map(|v| arr.push(CellValue::DBool( BoolValue(v) ))) {
+                                println!("{}: src val= {}", err, e);
+                            }
                         }
                     },
                     CellValue::DByte(_) => {

@@ -161,7 +161,7 @@ impl<'a> FKValue<'a> {
                                         if let Ok(num) = v[1..].parse::<usize>() {
                                             if fk_names.capacity() < num {
                                                 fk_names.reserve(num << 1);
-                                                unsafe {fk_names.set_len(num << 1); }
+                                                unsafe { fk_names.set_len(num << 1); }
                                             }
                                             fk_names[num] = String::from(&vals[cnt]);
                                         } else {

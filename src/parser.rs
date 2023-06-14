@@ -187,7 +187,10 @@ impl Parser {
                             vals.push("");
                         }
                     }
-                    fk_data.push((col, (&v[1..], vals, CellValue::get_type(ty))));
+                    
+                    let mut mty = ty.clone();
+                    convert_type(Rc::make_mut(&mut mty));
+                    fk_data.push((col, (&v[1..], vals, CellValue::get_type(&mty))));
                 }
             }
         }
