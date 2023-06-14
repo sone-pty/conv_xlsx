@@ -2,10 +2,10 @@ use std::{rc::Rc, io::{Write, Result}};
 use super::{stack::Stack, LSMap};
 
 macro_rules! get_basic_type_string {
-    ($self:ident, $($enum:ident::$variant:ident),+) => {
+    ($self:ident, $stream:ident, $($enum:ident::$variant:ident),+) => {
         match $self {
-            $( $enum::$variant(v) => v.ty() ),+,
-            _ => String::default(),
+            $( $enum::$variant(v) => v.ty($stream) ),+,
+            _ => Ok(())
         }
     };
 }
@@ -311,9 +311,10 @@ impl CellValue {
 
     //--------------------------------internal---------------------------------------------
     
-    fn get_basic_type_string(&self) -> String {
+    fn get_basic_type_string<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         get_basic_type_string!(
-            self, 
+            self,
+            stream,
             CellValue::DBool, 
             CellValue::DByte, 
             CellValue::DSByte, 
@@ -555,7 +556,7 @@ pub trait ValueInfo {
     // code
     fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()>;
     // used by array/list code
-    fn ty(&self) -> String;
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()>;
 }
 #[derive(Default)]
 pub struct BoolValue(pub bool);
@@ -604,8 +605,9 @@ impl ValueInfo for NoneValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("none")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("none".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -619,8 +621,9 @@ impl ValueInfo for BoolValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("bool")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("bool".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -630,8 +633,9 @@ impl ValueInfo for LStringValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("int")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("int".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -649,8 +653,9 @@ impl ValueInfo for StringValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("string")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("string".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -660,8 +665,9 @@ impl ValueInfo for ShortValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("short")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("short".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -671,8 +677,9 @@ impl ValueInfo for UShortValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("ushort")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("ushort".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -682,8 +689,9 @@ impl ValueInfo for IntValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("int")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("int".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -693,8 +701,9 @@ impl ValueInfo for UIntValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("uint")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("uint".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -704,8 +713,9 @@ impl ValueInfo for ByteValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("byte")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("byte".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -715,8 +725,9 @@ impl ValueInfo for SByteValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from("sbyte")
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("sbyte".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -735,8 +746,9 @@ impl ValueInfo for CustomValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        String::from(self.0.as_str())
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -746,7 +758,7 @@ impl ValueInfo for ArrayValue {
             stream.write("".as_bytes())?;
         } else {
             stream.write("new ".as_bytes())?;
-            stream.write(self.ty().as_bytes())?;
+            self.ty(stream)?;
             stream.write("{".as_bytes())?;
             let mut cnt = 1;
 
@@ -774,10 +786,10 @@ impl ValueInfo for ArrayValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        let mut ty = (self.0)[0].get_basic_type_string();
-        ty.push_str("[]");
-        ty
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        (self.0)[0].get_basic_type_string(stream)?;
+        stream.write("[]".as_bytes())?;
+        Ok(())
     }
 }
 
@@ -787,7 +799,7 @@ impl ValueInfo for ListValue {
             stream.write("".as_bytes())?;
         } else {
             stream.write("new ".as_bytes())?;
-            stream.write(self.ty().as_bytes())?;
+            self.ty(stream)?;
             stream.write("{".as_bytes())?;
             let mut cnt = 1;
 
@@ -818,20 +830,18 @@ impl ValueInfo for ListValue {
         Ok(())
     }
 
-    fn ty(&self) -> String {
-        let mut ty = String::default();
-        ty.push_str("List<");
-
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("List<".as_bytes())?;
         let first = self.0.first().unwrap();
         match first {
-            CellValue::DArray(v) => { ty.push_str(&v.ty()); }
-            CellValue::DList(v) => { ty.push_str(&v.ty()); }
+            CellValue::DArray(v) => { v.ty(stream)?; }
+            CellValue::DList(v) => { v.ty(stream)?; }
             // basic type
             _ => {
-                ty.push_str(&first.get_basic_type_string());
+                first.get_basic_type_string(stream)?;
             }
         }
-        ty.push('>');
-        ty
+        stream.write(">".as_bytes())?;
+        Ok(())
     }
 }

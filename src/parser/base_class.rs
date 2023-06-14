@@ -166,7 +166,7 @@ impl CodeGenerator for BaseClass {
                     format(tab_nums + 2, stream)?;
                     stream.write("_refNameMap.Load(\"".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write("\".as_bytes())?;".as_bytes())?;
+                    stream.write("\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("_extraDataMap.Clear();".as_bytes())?;
@@ -205,7 +205,7 @@ impl CodeGenerator for BaseClass {
                     stream.write("return id;".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
-                    stream.write("throw new Exception($\"{refName} not found.\".as_bytes())?;".as_bytes())?;
+                    stream.write("throw new Exception($\"{refName} not found.\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
                     stream.write("}".as_bytes())?;
@@ -244,7 +244,7 @@ impl CodeGenerator for BaseClass {
                     format(tab_nums + 3, stream)?;
                     stream.write("throw new Exception($\"".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write(" template id {item.TemplateId} created by {identifier} already exist.\".as_bytes())?;".as_bytes())?;
+                    stream.write(" template id {item.TemplateId} created by {identifier} already exist.\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("if (_extraDataMap.ContainsKey(id))".as_bytes())?;
@@ -252,7 +252,7 @@ impl CodeGenerator for BaseClass {
                     format(tab_nums + 3, stream)?;
                     stream.write("throw new Exception($\"".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write(" extra template id {item.TemplateId} created by {identifier} already exist.\".as_bytes())?;".as_bytes())?;
+                    stream.write(" extra template id {item.TemplateId} created by {identifier} already exist.\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("if (_refNameMap.TryGetValue(refName, out var refId))".as_bytes())?;
@@ -260,7 +260,7 @@ impl CodeGenerator for BaseClass {
                     format(tab_nums + 3, stream)?;
                     stream.write("throw new Exception($\"".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write(" template reference name {refName}(id = {item.TemplateId}) created by {identifier} already exist with templateId {refId}).\".as_bytes())?;".as_bytes())?;
+                    stream.write(" template reference name {refName}(id = {item.TemplateId}) created by {identifier} already exist with templateId {refId}).\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("_refNameMap.Add(refName, id);".as_bytes())?;
@@ -318,7 +318,7 @@ impl CodeGenerator for BaseClass {
                     stream.write("// 预期为有效 Id 但仍然访问不到数据时".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
-                    stream.write("GameData.Utilities.AdaptableLog.TagWarning(GetType().FullName, $\"index {id} is not in range [0, {_dataArray.Count}) and is not defined in _extraDataMap (count: {_extraDataMap.Count})\".as_bytes())?;".as_bytes())?;
+                stream.write("GameData.Utilities.AdaptableLog.TagWarning(GetType().FullName, $\"index {id} is not in range [0, {_dataArray.Count}) and is not defined in _extraDataMap (count: {_extraDataMap.Count})\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("return null;".as_bytes())?;
