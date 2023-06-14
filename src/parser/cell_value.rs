@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, io::{Write, Result}};
 use super::{stack::Stack, LSMap};
 
 macro_rules! get_basic_type_string {
@@ -11,9 +11,9 @@ macro_rules! get_basic_type_string {
 }
 
 macro_rules! gen_code {
-    ($self:ident, $($enum:ident::$variant:ident),+) => {
+    ($self:ident, $stream:ident, $($enum:ident::$variant:ident),+) => {
         match $self {
-            $( $enum::$variant(v) => v.value() ),+,
+            $( $enum::$variant(v) => v.value($stream) ),+,
         }
     };
 }
@@ -174,9 +174,10 @@ impl CellValue {
         }
     }
 
-    pub fn gen_code(&self) -> String {
+    pub fn gen_code<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         gen_code!(
             self,
+            stream,
             CellValue::DBool,
             CellValue::DByte, 
             CellValue::DSByte, 
@@ -552,7 +553,7 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
 
 pub trait ValueInfo {
     // code
-    fn value(&self) -> String;
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()>;
     // used by array/list code
     fn ty(&self) -> String;
 }
@@ -598,8 +599,9 @@ pub struct NoneValue;
 //----------------------------------impl-------------------------------------------
 
 impl ValueInfo for NoneValue {
-    fn value(&self) -> String {
-        String::from("null")
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("null".as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -608,12 +610,13 @@ impl ValueInfo for NoneValue {
 }
 
 impl ValueInfo for BoolValue {
-    fn value(&self) -> String {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         if self.0 == false {
-            String::from("false")
+            stream.write("false".as_bytes())?;
         } else {
-            String::from("true")
+            stream.write("true".as_bytes())?;
         }
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -622,8 +625,9 @@ impl ValueInfo for BoolValue {
 }
 
 impl ValueInfo for LStringValue {
-    fn value(&self) -> String {
-        self.1.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.1.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -632,17 +636,17 @@ impl ValueInfo for LStringValue {
 }
 
 impl ValueInfo for StringValue {
-    fn value(&self) -> String {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         if self.0.is_empty() {
-            String::from("null")
+            stream.write("null".as_bytes())?;
         } else if self.0.as_str() == "\"\"" {
-            String::from("\"\"")
+            stream.write("\"\"".as_bytes())?;
         } else {
-            let mut ret = String::from('\"');
-            ret.push_str(&self.0);
-            ret.push('\"');
-            ret
+            stream.write("\"".as_bytes())?;
+            stream.write(self.0.as_bytes())?;
+            stream.write("\"".as_bytes())?;
         }
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -651,8 +655,9 @@ impl ValueInfo for StringValue {
 }
 
 impl ValueInfo for ShortValue {
-    fn value(&self) -> String {
-        self.0.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -661,8 +666,9 @@ impl ValueInfo for ShortValue {
 }
 
 impl ValueInfo for UShortValue {
-    fn value(&self) -> String {
-        self.0.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -671,8 +677,9 @@ impl ValueInfo for UShortValue {
 }
 
 impl ValueInfo for IntValue {
-    fn value(&self) -> String {
-        self.0.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -681,8 +688,9 @@ impl ValueInfo for IntValue {
 }
 
 impl ValueInfo for UIntValue {
-    fn value(&self) -> String {
-        self.0.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -691,8 +699,9 @@ impl ValueInfo for UIntValue {
 }
 
 impl ValueInfo for ByteValue {
-    fn value(&self) -> String {
-        self.0.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -701,8 +710,9 @@ impl ValueInfo for ByteValue {
 }
 
 impl ValueInfo for SByteValue {
-    fn value(&self) -> String {
-        self.0.to_string()
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -711,18 +721,18 @@ impl ValueInfo for SByteValue {
 }
 
 impl ValueInfo for CustomValue {
-    fn value(&self) -> String {
-        let mut ret = String::from("new ");
-        ret.push_str(self.0.as_str());
-        ret.push('(');
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("new ".as_bytes())?;
+        stream.write(self.0.to_string().as_bytes())?;
+        stream.write("(".as_bytes())?;
         for v in self.1.as_str()[1..self.1.len()-1].chars() {
             match v {
-                '{' => { ret.push_str("new []{"); },
-                _ => { ret.push(v); }
+                '{' => { stream.write("new []{".as_bytes())?; },
+                _ => { stream.write(v.to_string().as_bytes())?; }
             }
         }
-        ret.push(')');
-        ret
+        stream.write(")".as_bytes())?;
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -731,37 +741,37 @@ impl ValueInfo for CustomValue {
 }
 
 impl ValueInfo for ArrayValue {
-    fn value(&self) -> String {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         if self.0.is_empty() {
-            String::default()
+            stream.write("".as_bytes())?;
         } else {
-            let mut ret = String::from("new ");
-            ret.push_str(&self.ty());
-            ret.push('{');
+            stream.write("new ".as_bytes())?;
+            stream.write(self.ty().as_bytes())?;
+            stream.write("{".as_bytes())?;
+            let mut cnt = 1;
 
             for v in self.0.iter().skip(1) {
-                let s = match v {
-                    CellValue::DBool(v) => {v.value()},
-                    CellValue::DByte(v) => {v.value()},
-                    CellValue::DSByte(v) => {v.value()},
-                    CellValue::DInt(v) => {v.value()},
-                    CellValue::DUInt(v) => {v.value()},
-                    CellValue::DString(v) => {v.value()},
-                    CellValue::DLString(v) => {v.value()},
-                    CellValue::DShort(v) => {v.value()},
-                    CellValue::DUShort(v) => {v.value()},
-                    CellValue::DCustom(v) => {v.value()},
-                    _ => {String::default()}
+                match v {
+                    CellValue::DBool(v) => { v.value(stream)?; },
+                    CellValue::DByte(v) => { v.value(stream)?; },
+                    CellValue::DSByte(v) => { v.value(stream)?; },
+                    CellValue::DInt(v) => { v.value(stream)?; },
+                    CellValue::DUInt(v) => { v.value(stream)?; },
+                    CellValue::DString(v) => { v.value(stream)?; },
+                    CellValue::DLString(v) => { v.value(stream)?;},
+                    CellValue::DShort(v) => { v.value(stream)?; },
+                    CellValue::DUShort(v) => { v.value(stream)?; },
+                    CellValue::DCustom(v) => { v.value(stream)?; },
+                    _ => { stream.write("".as_bytes())?; }
                 };
-                ret.push_str(&s);
-                ret.push(',');
+                if cnt < self.0.len()-1 {
+                    stream.write(",".as_bytes())?;
+                }
+                cnt += 1;
             }
-            if ret.ends_with(',') {
-                ret.remove(ret.len() - 1);
-            }
-            ret.push('}');
-            ret
+            stream.write("}".as_bytes())?;
         }
+        Ok(())
     }
 
     fn ty(&self) -> String {
@@ -772,40 +782,40 @@ impl ValueInfo for ArrayValue {
 }
 
 impl ValueInfo for ListValue {
-    fn value(&self) -> String {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         if self.0.is_empty() {
-            String::default()
+            stream.write("".as_bytes())?;
         } else {
-            let mut ret = String::from("new ");
-            ret.push_str(&self.ty());
-            ret.push('{');
+            stream.write("new ".as_bytes())?;
+            stream.write(self.ty().as_bytes())?;
+            stream.write("{".as_bytes())?;
+            let mut cnt = 1;
 
             for v in self.0.iter().skip(1) {
-                let s = match v {
-                    CellValue::DBool(v) => {v.value()},
-                    CellValue::DByte(v) => {v.value()},
-                    CellValue::DSByte(v) => {v.value()},
-                    CellValue::DInt(v) => {v.value()},
-                    CellValue::DUInt(v) => {v.value()},
-                    CellValue::DString(v) => {v.value()},
-                    CellValue::DLString(v) => {v.value()},
-                    CellValue::DShort(v) => {v.value()},
-                    CellValue::DUShort(v) => {v.value()},
-                    CellValue::DCustom(v) => {v.value()},
-                    CellValue::DArray(v) => {v.value()},
-                    CellValue::DList(v) => {v.value()}
-                    _ => {String::default()}
+                match v {
+                    CellValue::DBool(v) => { v.value(stream)?; },
+                    CellValue::DByte(v) => { v.value(stream)?; },
+                    CellValue::DSByte(v) => { v.value(stream)?; },
+                    CellValue::DInt(v) => { v.value(stream)?; },
+                    CellValue::DUInt(v) => { v.value(stream)?; },
+                    CellValue::DString(v) => { v.value(stream)?; },
+                    CellValue::DLString(v) => { v.value(stream)?; },
+                    CellValue::DShort(v) => { v.value(stream)?; },
+                    CellValue::DUShort(v) => { v.value(stream)?; },
+                    CellValue::DCustom(v) => { v.value(stream)?; },
+                    CellValue::DArray(v) => { v.value(stream)?; },
+                    CellValue::DList(v) => { v.value(stream)?; }
+                    _ => { stream.write("".as_bytes())?; }
                 };
-                ret.push_str(&s);
-                ret.push(',');
+                if cnt < self.0.len() {
+                    stream.write(",".as_bytes())?;
+                }
+                cnt += 1;
             }
-
-            if ret.ends_with(',') {
-                ret.remove(ret.len() - 1);
-            }
-            ret.push('}');
-            ret
+            
+            stream.write("}".as_bytes())?;
         }
+        Ok(())
     }
 
     fn ty(&self) -> String {

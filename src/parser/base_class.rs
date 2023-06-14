@@ -2,6 +2,7 @@ use crate::defs::{DEFAULT_LINES, ItemStr};
 
 use super::cell_value::{CellValue, self};
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
+use std::io::{Write, Result};
 use std::rc::Weak;
 use std::cell::RefCell;
 
@@ -28,15 +29,12 @@ impl Default for BaseClass {
 }
 
 impl CodeGenerator for BaseClass {
-    type Output = String;
-
-    fn gen_code(&self, end: &'static str, tab_nums: i32) -> Self::Output {
-        let mut code = String::with_capacity(4096);
-        
-        let format = |n: i32, code: &mut String| {
+    fn gen_code<W: Write + ?Sized>(&self, end: &'static str, tab_nums: i32, stream: &mut W) -> Result<()> {
+        let format = |n: i32, stream: &mut W| -> Result<()> {
             for _ in 0..n {
-                code.push('\t');
+                stream.write("\t".as_bytes())?;
             }
+            Ok(())
         };
 
         if let (Some(weak_defaults), Some(weak_vars), Some(weak_keys)) = (&self.defaults, &self.vals, &self.keytypes) {
@@ -49,459 +47,460 @@ impl CodeGenerator for BaseClass {
                     let requires = &rfds.as_ref().borrow();
 
                     //--------------fixed code----------------------------
-                    format(tab_nums, &mut code);
-                    code.push_str("[Serializable]");
-                    code.push_str(end);
-                    format(tab_nums, &mut code);
-                    code.push_str("public class ");
-                    code.push_str(&self.name);
-                    code.push_str(" : IEnumerable<");
-                    code.push_str(&self.name);
-                    code.push_str("Item>, IConfigData");
-                    code.push_str(end);
-                    format(tab_nums, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public static ");
-                    code.push_str(&self.name);
-                    code.push_str(" Instance = new ");
-                    code.push_str(&self.name);
-                    code.push_str("();");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("private readonly Dictionary<string, int> _refNameMap = new Dictionary<string, int>();");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("private List<");
-                    code.push_str(&self.name);
-                    code.push_str("Item> _dataArray = null;");
-                    code.push_str(end);
+                    format(tab_nums, stream)?;
+                    stream.write("[Serializable]".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums, stream)?;
+                    stream.write("public class ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write(" : IEnumerable<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item>, IConfigData".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public static ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write(" Instance = new ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("private readonly Dictionary<string, int> _refNameMap = new Dictionary<string, int>();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("private List<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item> _dataArray = null;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
                     //--------------fixed code----------------------------
                 
                     // DefKey static class
                     if let KeyType::DefKey(ref vals) = *keys {
-                        code.push_str(end);
-                        format(tab_nums + 1, &mut code);
-                        code.push_str("public static class DefKey");
-                        code.push_str(end);
-                        format(tab_nums + 1, &mut code);
-                        code.push('{');
-                        code.push_str(end);
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("public static class DefKey".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
 
                         for v in vals {
-                            format(tab_nums + 2, &mut code);
-                            code.push_str("public const sbyte ");
+                            format(tab_nums + 2, stream)?;
+                            stream.write("public const sbyte ".as_bytes())?;
                             if let Some(ref v1) = v.0 {
-                                code.push_str(v1);
+                                stream.write(v1.as_bytes())?;
                             }
-                            code.push_str(" = ");
-                            code.push_str(&v.1.to_string());
-                            code.push(';');
-                            code.push_str(end);
+                            stream.write(" = ".as_bytes())?;
+                            stream.write(v.1.to_string().as_bytes())?;
+                            stream.write(";".as_bytes())?;
+                            stream.write(end.as_bytes())?;
                         }
-                        format(tab_nums + 1, &mut code);
-                        code.push('}');
-                        code.push_str(end);
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
                     }
 
                     for term in 0..(self.lines / DEFAULT_LINES)+1 {
-                        code.push_str(end);
-                        format(tab_nums + 1, &mut code);
-                        code.push_str("private void CreateItems");
-                        code.push_str(&term.to_string());
-                        code.push_str("()");
-                        code.push_str(end);
-                        format(tab_nums + 1, &mut code);
-                        code.push('{');
-                        code.push_str(end);
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("private void CreateItems".as_bytes())?;
+                        stream.write(term.to_string().as_bytes())?;
+                        stream.write("()".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
 
                         let idx = term * DEFAULT_LINES;
                         let end_idx = if self.lines - idx < DEFAULT_LINES { self.lines } else { idx + DEFAULT_LINES };
                         for row in idx..end_idx {
-                            format(tab_nums + 2, &mut code);
-                            code.push_str("_dataArray.Add(new ");
-                            code.push_str(&self.name);
-                            code.push_str("Item(");
-                            code.push_str(&row.to_string());
-                            code.push(',');
+                            format(tab_nums + 2, stream)?;
+                            stream.write("_dataArray.Add(new ".as_bytes())?;
+                            stream.write(self.name.as_bytes())?;
+                            stream.write("Item(".as_bytes())?;
+                            stream.write(row.to_string().as_bytes())?;
+                            stream.write(",".as_bytes())?;
 
                             for i in 1..requires.len() {
                                 if let Some(Some(d)) = requires.get(i) {
                                     if let Some(vv) = map_vars.get(d) {
                                         if vv[row].is_none() {
                                             if let Some(defv) = map_defaults.get(d) {
-                                                code.push_str(&defv.gen_code());
+                                                defv.gen_code(stream)?;
                                             } else {
-                                                code.push_str(&CellValue::DNone(cell_value::NoneValue).gen_code());
+                                                CellValue::DNone(cell_value::NoneValue).gen_code(stream)?;
                                             }
                                         } else {
-                                            code.push_str(&vv[row].gen_code());
+                                            vv[row].gen_code(stream)?;
                                         }
-                                        code.push(',');
+                                        if i != requires.len()-1 {
+                                            stream.write(",".as_bytes())?;
+                                        }
                                     }
                                 }
                             }
 
-                            code.remove(code.len() - 1);
-                            code.push_str("));");
-                            code.push_str(end);
+                            stream.write("));".as_bytes())?;
+                            stream.write(end.as_bytes())?;
                         }
 
-                        format(tab_nums + 1, &mut code);
-                        code.push('}');
-                        code.push_str(end);
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
                     }
 
                     //--------------------------Init-begin----------------------------------
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public void Init()");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("_refNameMap.Clear();");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("_refNameMap.Load(\"");
-                    code.push_str(&self.name);
-                    code.push_str("\");");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("_extraDataMap.Clear();");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("_dataArray = new List<");
-                    code.push_str(&self.name);
-                    code.push_str("Item>( ");
-                    code.push_str(&self.lines.to_string());
-                    code.push_str(" ) {};");
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public void Init()".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("_refNameMap.Clear();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("_refNameMap.Load(\"".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("\".as_bytes())?;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("_extraDataMap.Clear();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("_dataArray = new List<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item>( ".as_bytes())?;
+                    stream.write(self.lines.to_string().as_bytes())?;
+                    stream.write(" ) {};".as_bytes())?;
                     for term in 0..(self.lines / DEFAULT_LINES)+1 {
-                        code.push_str(end);
-                        format(tab_nums + 2, &mut code);
-                        code.push_str("CreateItems");
-                        code.push_str(&term.to_string());
-                        code.push_str("();");
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("CreateItems".as_bytes())?;
+                        stream.write(term.to_string().as_bytes())?;
+                        stream.write("();".as_bytes())?;
                     }
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    //--------------------------Init-end----------------------------------
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------Init-end.as_bytes()----------------------------------
 
                     //--------------------------GetItemId-begin----------------------------------
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public int GetItemId(string refName)");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (_refNameMap.TryGetValue(refName, out var id))");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("return id;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("throw new Exception($\"{refName} not found.\");");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    //--------------------------GetItemId-end----------------------------------
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public int GetItemId(string refName)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (_refNameMap.TryGetValue(refName, out var id))".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("return id;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("throw new Exception($\"{refName} not found.\".as_bytes())?;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------GetItemId-end.as_bytes()----------------------------------
 
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("private readonly Dictionary<int, ");
-                    code.push_str(&self.name);
-                    code.push_str("Item> _extraDataMap = new Dictionary<int, ");
-                    code.push_str(&self.name);
-                    code.push_str("Item>();");
-                    code.push_str(end);
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("private readonly Dictionary<int, ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item> _extraDataMap = new Dictionary<int, ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item>();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
                     // empty line
-                    code.push_str(end);
+                    stream.write(end.as_bytes())?;
 
                     //--------------------------AddExtraItem-begin----------------------------------
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public int AddExtraItem(string identifier, string refName, object configItem)");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("var item = (");
-                    code.push_str(&self.name);
-                    code.push_str("Item)configItem;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("var id = (int) item.TemplateId;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (id < _dataArray.Count)");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("throw new Exception($\"");
-                    code.push_str(&self.name);
-                    code.push_str(" template id {item.TemplateId} created by {identifier} already exist.\");");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (_extraDataMap.ContainsKey(id))");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("throw new Exception($\"");
-                    code.push_str(&self.name);
-                    code.push_str(" extra template id {item.TemplateId} created by {identifier} already exist.\");");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (_refNameMap.TryGetValue(refName, out var refId))");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("throw new Exception($\"");
-                    code.push_str(&self.name);
-                    code.push_str(" template reference name {refName}(id = {item.TemplateId}) created by {identifier} already exist with templateId {refId}).\");");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("_refNameMap.Add(refName, id);");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("_extraDataMap.Add(id, item);");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("return id;");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    //--------------------------AddExtraItem-end----------------------------------
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public int AddExtraItem(string identifier, string refName, object configItem)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("var item = (".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item)configItem;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("var id = (int) item.TemplateId;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (id < _dataArray.Count)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("throw new Exception($\"".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write(" template id {item.TemplateId} created by {identifier} already exist.\".as_bytes())?;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (_extraDataMap.ContainsKey(id))".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("throw new Exception($\"".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write(" extra template id {item.TemplateId} created by {identifier} already exist.\".as_bytes())?;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (_refNameMap.TryGetValue(refName, out var refId))".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("throw new Exception($\"".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write(" template reference name {refName}(id = {item.TemplateId}) created by {identifier} already exist with templateId {refId}).\".as_bytes())?;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("_refNameMap.Add(refName, id);".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("_extraDataMap.Add(id, item);".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("return id;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------AddExtraItem-end.as_bytes()----------------------------------
 
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public ");
-                    code.push_str(&self.name);
-                    code.push_str("Item this[sbyte id] => GetItem(id);");
-                    code.push_str(end);
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public ");
-                    code.push_str(&self.name);
-                    code.push_str("Item this[int id] => GetItem((sbyte)id);");
-                    code.push_str(end);
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public ");
-                    code.push_str(&self.name);
-                    code.push_str("Item this[string refName] => this[_refNameMap[refName]];");
-                    code.push_str(end);
-                    code.push_str(end);
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item this[sbyte id] => GetItem(id);".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item this[int id] => GetItem((sbyte)id);".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item this[string refName] => this[_refNameMap[refName]];".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    stream.write(end.as_bytes())?;
 
                     //--------------------------GetItem-begin----------------------------------
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public ");
-                    code.push_str(&self.name);
-                    code.push_str("Item GetItem(sbyte id)");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (id < 0) return null;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (id < _dataArray.Count) return _dataArray[(int)id];");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if (_extraDataMap.TryGetValue((int) id, out var item)) return item;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("// 预期为有效 Id 但仍然访问不到数据时");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("GameData.Utilities.AdaptableLog.TagWarning(GetType().FullName, $\"index {id} is not in range [0, {_dataArray.Count}) and is not defined in _extraDataMap (count: {_extraDataMap.Count})\");");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("return null;");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    code.push_str(end);
-                    //--------------------------GetItem-end----------------------------------
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item GetItem(sbyte id)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (id < 0) return null;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (id < _dataArray.Count) return _dataArray[(int)id];".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if (_extraDataMap.TryGetValue((int) id, out var item)) return item;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("// 预期为有效 Id 但仍然访问不到数据时".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("GameData.Utilities.AdaptableLog.TagWarning(GetType().FullName, $\"index {id} is not in range [0, {_dataArray.Count}) and is not defined in _extraDataMap (count: {_extraDataMap.Count})\".as_bytes())?;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("return null;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------GetItem-end.as_bytes()----------------------------------
                     
                     //--------------------------RequiredFields-begin----------------------------------
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("private readonly HashSet<string> RequiredFields = new HashSet<string>()");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
+                    format(tab_nums + 1, stream)?;
+                    stream.write("private readonly HashSet<string> RequiredFields = new HashSet<string>()".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
                     for v in requires.iter() {
                         if let Some(vv) = v {
-                            format(tab_nums + 2, &mut code);
-                            code.push('\"');
-                            code.push_str(vv);
-                            code.push('\"');
-                            code.push(',');
-                            code.push_str(end);
+                            format(tab_nums + 2, stream)?;
+                            stream.write("\"".as_bytes())?;
+                            stream.write(vv.as_bytes())?;
+                            stream.write("\"".as_bytes())?;
+                            stream.write(",".as_bytes())?;
+                            stream.write(end.as_bytes())?;
                         }
                     }
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("};");
-                    code.push_str(end);
-                    //--------------------------RequiredFields-end----------------------------------
+                    format(tab_nums + 1, stream)?;
+                    stream.write("};".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------RequiredFields-end.as_bytes()----------------------------------
 
                     //--------------------------GetAllKeys-begin----------------------------------
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public List<sbyte> GetAllKeys()");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("return (from item in _dataArray where null != item select item.TemplateId).ToList();");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    //--------------------------GetAllKeys-end----------------------------------
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public List<sbyte> GetAllKeys()".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("return (from item in _dataArray where null != item select item.TemplateId).ToList();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------GetAllKeys-end.as_bytes()----------------------------------
 
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public int Count => _dataArray.Count;");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public int CountWithExtra => Count + _extraDataMap.Count;");
-                    code.push_str(end);
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public int Count => _dataArray.Count;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public int CountWithExtra => Count + _extraDataMap.Count;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
 
                     //--------------------------Iterate-begin----------------------------------
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("public void Iterate(Func<");
-                    code.push_str(&self.name);
-                    code.push_str("Item,bool> iterateFunc)");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("if(null == iterateFunc)");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("return;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("foreach(");
-                    code.push_str(&self.name);
-                    code.push_str("Item item in _dataArray)");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("if(null == item)");
-                    code.push_str(end);
-                    format(tab_nums + 4, &mut code);
-                    code.push_str("continue;");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("if(!iterateFunc(item))");
-                    code.push_str(end);
-                    format(tab_nums + 4, &mut code);
-                    code.push_str("break;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push('}');
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public void Iterate(Func<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item,bool> iterateFunc)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("if(null == iterateFunc)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("return;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("foreach(".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item item in _dataArray)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("if(null == item)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 4, stream)?;
+                    stream.write("continue;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("if(!iterateFunc(item))".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 4, stream)?;
+                    stream.write("break;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("}".as_bytes())?;
 
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("foreach(");
-                    code.push_str(&self.name);
-                    code.push_str("Item item in _extraDataMap.Values)");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("if(null == item)");
-                    code.push_str(end);
-                    format(tab_nums + 4, &mut code);
-                    code.push_str("continue;");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("if(!iterateFunc(item))");
-                    code.push_str(end);
-                    format(tab_nums + 4, &mut code);
-                    code.push_str("break;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    //--------------------------Iterate-end----------------------------------
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("foreach(".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item item in _extraDataMap.Values)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("if(null == item)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 4, stream)?;
+                    stream.write("continue;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("if(!iterateFunc(item))".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 4, stream)?;
+                    stream.write("break;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------Iterate-end.as_bytes()----------------------------------
 
                     //--------------------------GetEnumerator-begin----------------------------------
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("IEnumerator<");
-                    code.push_str(&self.name);
-                    code.push_str("Item> IEnumerable<");
-                    code.push_str(&self.name);
-                    code.push_str("Item>.GetEnumerator()");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("foreach (var item in _dataArray)");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("yield return item;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("foreach (var item in _extraDataMap.Values)");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("yield return item;");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("IEnumerator<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item> IEnumerable<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item>.GetEnumerator()".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("foreach (var item in _dataArray)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("yield return item;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("foreach (var item in _extraDataMap.Values)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("yield return item;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
 
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push_str("IEnumerator IEnumerable.GetEnumerator()");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('{');
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("foreach (var item in _dataArray)");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("yield return item;");
-                    code.push_str(end);
-                    format(tab_nums + 2, &mut code);
-                    code.push_str("foreach (var item in _extraDataMap.Values)");
-                    code.push_str(end);
-                    format(tab_nums + 3, &mut code);
-                    code.push_str("yield return item;");
-                    code.push_str(end);
-                    format(tab_nums + 1, &mut code);
-                    code.push('}');
-                    code.push_str(end);
-                    //--------------------------GetEnumerator-end----------------------------------
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("IEnumerator IEnumerable.GetEnumerator()".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("foreach (var item in _dataArray)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("yield return item;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("foreach (var item in _extraDataMap.Values)".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 3, stream)?;
+                    stream.write("yield return item;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    //--------------------------GetEnumerator-end.as_bytes()----------------------------------
 
-                    format(tab_nums, &mut code);
-                    code.push('}');
+                    format(tab_nums, stream)?;
+                    stream.write("}".as_bytes())?;
                 }
             }
         }
 
-        code
+        Ok(())
     }
 }
