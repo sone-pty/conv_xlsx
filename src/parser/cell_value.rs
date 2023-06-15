@@ -28,6 +28,8 @@ pub enum CellValue {
     DByte(ByteValue),
     DInt(IntValue),
     DUInt(UIntValue),
+    DFloat(FloatValue),
+    DDouble(DoubleValue),
     DCustom(CustomValue),
     DArray(ArrayValue), // first element of arr is one dumb, start from index 1
     DList(ListValue),  // first element of list is one dumb, start from index 1
@@ -103,6 +105,20 @@ impl CellValue {
                     Self::DUInt(UIntValue(v))
                 } else {
                     Self::DUInt(UIntValue(0))
+                }
+            }
+            "float" => {
+                if let Ok(v) = val_str.parse::<f32>() {
+                    Self::DFloat(FloatValue(v))
+                } else {
+                    Self::DFloat(FloatValue(0_f32))
+                }
+            }
+            "double" => {
+                if let Ok(v) = val_str.parse::<f64>() {
+                    Self::DDouble(DoubleValue(v))
+                } else {
+                    Self::DDouble(DoubleValue(0_f64))
                 }
             }
             // array or list
@@ -182,7 +198,9 @@ impl CellValue {
             CellValue::DByte, 
             CellValue::DSByte, 
             CellValue::DInt, 
-            CellValue::DUInt, 
+            CellValue::DUInt,
+            CellValue::DFloat,
+            CellValue::DDouble,
             CellValue::DShort, 
             CellValue::DUShort, 
             CellValue::DString,
@@ -239,6 +257,8 @@ impl CellValue {
             "sbyte" => Self::DSByte(SByteValue::default()),
             "short" => Self::DShort(ShortValue::default()),
             "ushort" => Self::DUShort(UShortValue::default()),
+            "float" => Self::DFloat(FloatValue::default()),
+            "double" => Self::DDouble(DoubleValue::default()),
             "string" => Self::DString(StringValue::default()),
             "LString" | "Lstring" => Self::DLString(LStringValue::default()),
             // array or list
@@ -321,7 +341,9 @@ impl CellValue {
             CellValue::DInt, 
             CellValue::DUInt, 
             CellValue::DShort, 
-            CellValue::DUShort, 
+            CellValue::DUShort,
+            CellValue::DFloat,
+            CellValue::DDouble,
             CellValue::DString,
             CellValue::DLString,
             CellValue::DCustom
@@ -337,6 +359,8 @@ impl CellValue {
             "LString" | "Lstring" => CellValue::DLString(LStringValue(Rc::default(), usize::default())),
             "int" => CellValue::DInt(IntValue(0)),
             "uint" => CellValue::DUInt(UIntValue(0)),
+            "float" => CellValue::DFloat(FloatValue(0_f32)),
+            "double" => CellValue::DDouble(DoubleValue(0_f64)),
             "sbyte" => CellValue::DSByte(SByteValue(0)),
             "byte" => CellValue::DByte(ByteValue(0)),
             "bool" => CellValue::DBool(BoolValue(true)),
@@ -370,6 +394,12 @@ impl CellValue {
             },
             CellValue::DUInt(_) => {
                 CellValue::DUInt(UIntValue(0))
+            },
+            CellValue::DFloat(_) => {
+                CellValue::DFloat(FloatValue(0_f32))
+            },
+            CellValue::DDouble(_) => {
+                CellValue::DDouble(DoubleValue(0_f64))
             },
             CellValue::DUShort(_) => {
                 CellValue::DUShort(UShortValue(0))
@@ -495,6 +525,16 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                             println!("{}: src val= {}", err, e);
                         }
                     },
+                    CellValue::DFloat(_) => {
+                        if let Err(err) = e.parse::<f32>().map(|v| arr.push(CellValue::DFloat( FloatValue(v) ))) {
+                            println!("{}: src val= {}", err, e);
+                        }
+                    },
+                    CellValue::DDouble(_) => {
+                        if let Err(err) = e.parse::<f64>().map(|v| arr.push(CellValue::DDouble( DoubleValue(v) ))) {
+                            println!("{}: src val= {}", err, e);
+                        }
+                    },
                     CellValue::DString(_) => {
                         arr.push(CellValue::DString( StringValue(Rc::new(e.to_string())) ));
                     },
@@ -587,6 +627,12 @@ pub struct IntValue(pub i32);
 
 #[derive(Default)]
 pub struct UIntValue(pub u32);
+
+#[derive(Default)]
+pub struct FloatValue(pub f32);
+
+#[derive(Default)]
+pub struct DoubleValue(pub f64);
 
 #[derive(Default)]
 pub struct ByteValue(pub u8);
@@ -713,6 +759,30 @@ impl ValueInfo for UIntValue {
     }
 }
 
+impl ValueInfo for FloatValue {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
+    }
+
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("float".as_bytes())?;
+        Ok(())
+    }
+}
+
+impl ValueInfo for DoubleValue {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write(self.0.to_string().as_bytes())?;
+        Ok(())
+    }
+
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("double".as_bytes())?;
+        Ok(())
+    }
+}
+
 impl ValueInfo for ByteValue {
     fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         stream.write(self.0.to_string().as_bytes())?;
@@ -779,6 +849,8 @@ impl ValueInfo for ArrayValue {
                     CellValue::DLString(v) => { v.value(stream)?;},
                     CellValue::DShort(v) => { v.value(stream)?; },
                     CellValue::DUShort(v) => { v.value(stream)?; },
+                    CellValue::DFloat(v) => { v.value(stream)?; },
+                    CellValue::DDouble(v) => { v.value(stream)?; },
                     CellValue::DCustom(v) => { v.value(stream)?; },
                     _ => { stream.write("".as_bytes())?; }
                 };
@@ -820,6 +892,8 @@ impl ValueInfo for ListValue {
                     CellValue::DLString(v) => { v.value(stream)?; },
                     CellValue::DShort(v) => { v.value(stream)?; },
                     CellValue::DUShort(v) => { v.value(stream)?; },
+                    CellValue::DFloat(v) => { v.value(stream)?; },
+                    CellValue::DDouble(v) => { v.value(stream)?; },
                     CellValue::DCustom(v) => { v.value(stream)?; },
                     CellValue::DArray(v) => { v.value(stream)?; },
                     CellValue::DList(v) => { v.value(stream)?; }
