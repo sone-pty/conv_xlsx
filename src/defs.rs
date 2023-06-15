@@ -19,6 +19,7 @@ pub type ItemStr = Option<Rc<String>>;
 
 pub const OUTPUT_DIR: &'static str = "output/";
 pub const SOURCE_XLSXS_DIR: &'static str = "xlsxs/";
+pub const REF_TEXT_DIR: &'static str = "ConfigRefNameMapping/";
 
 // 默认多少行数据切换构造方法
 pub const DEFAULT_LINES: usize = 101;
@@ -26,3 +27,4 @@ pub const DEFAULT_LINES: usize = 101;
 // 默认的文件后缀
 pub const DEFAULT_SOURCE_SUFFIX: &'static str = "xlsx";
 pub const DEFAULT_DEST_SUFFIX: &'static str = "cs";
+pub const DEFAULT_DEF_SUFFIX: &'static str = "ref.txt";

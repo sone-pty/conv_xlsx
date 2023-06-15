@@ -1,4 +1,4 @@
-use crate::defs::*;
+use crate::{defs::*, reference::RefData};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -34,7 +34,7 @@ trait CodeGenerator {
 
 pub enum KeyType {
     None,
-    DefKey(Vec<(ItemStr, usize)>),
+    DefKey(Vec<(ItemStr, usize, ItemStr)>),
     OriginalTemplateId,
 }
 
@@ -59,7 +59,7 @@ pub struct Parser {
     vals: Rc<RefCell<VarData>>,
     required_fields: Rc<RefCell<Vec<ItemStr>>>,
     key_type: Rc<RefCell<KeyType>>,
-    skip_cols: Vec<usize>
+    skip_cols: Vec<usize>,
 }
 
 impl CodeGenerator for Parser {
@@ -127,9 +127,10 @@ impl Parser {
         }
     }
 
-    pub fn read_file<P: AsRef<Path>>(&mut self, base_name: &str, path: P) -> Result<()> {
+    pub fn read_file<P: AsRef<Path>>(&mut self, base_name: &str, path: P, refdata: Option<RefData>) -> Result<()> {
         self.item_class.name = String::from(base_name);
         self.base_class.name = String::from(base_name);
+        self.base_class.refdata = refdata;
         let table = Self::get_table_with_id(path, "Template")?;
         self.parse_template(table);
         Ok(())
@@ -187,7 +188,7 @@ impl Parser {
                             vals.push("");
                         }
                     }
-                    
+
                     let mut mty = ty.clone();
                     convert_type(Rc::make_mut(&mut mty));
                     fk_data.push((col, (&v[1..], vals, CellValue::get_type(&mty))));
@@ -332,8 +333,8 @@ impl Parser {
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = *self.key_type.as_ref().borrow_mut() {
             for row in DATA_START_ROW..height-1 {
-                if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, row) {
-                    vec.push((Some(v.clone()), row - DATA_START_ROW));
+                if let (Some(v0), Some(v1)) = (table.cell(0, row), table.cell(DATA_TEMPLATE_ID_POS.0, row)) {
+                    vec.push((Some(v1.clone()), row - DATA_START_ROW, Some(v0.clone())));
                 }
             }
         }

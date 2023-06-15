@@ -1,7 +1,9 @@
 use crate::defs::{DEFAULT_LINES, ItemStr};
+use crate::reference::RefData;
 
 use super::cell_value::{CellValue, self};
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
+use std::fs::OpenOptions;
 use std::io::{Write, Result};
 use std::rc::Weak;
 use std::cell::RefCell;
@@ -12,7 +14,9 @@ pub struct BaseClass {
     pub vals: Option<Weak<RefCell<VarData>>>,
     pub lines: usize,
     pub required_fields: Option<Weak<RefCell<Vec<ItemStr>>>>,
-    pub keytypes: Option<Weak<RefCell<KeyType>>>
+    pub keytypes: Option<Weak<RefCell<KeyType>>>,
+    pub refdata: Option<RefData>,
+    pub additionals: RefCell<Vec<ItemStr>>
 }
 
 impl Default for BaseClass {
@@ -23,7 +27,9 @@ impl Default for BaseClass {
             vals: None,
             lines: 0,
             required_fields: None,
-            keytypes: None
+            keytypes: None,
+            refdata: None,
+            additionals: RefCell::from(Vec::default())
         }
     }
 }
@@ -87,17 +93,41 @@ impl CodeGenerator for BaseClass {
                         stream.write("{".as_bytes())?;
                         stream.write(end.as_bytes())?;
 
-                        for v in vals {
-                            format(tab_nums + 2, stream)?;
-                            stream.write("public const sbyte ".as_bytes())?;
-                            if let Some(ref v1) = v.0 {
-                                stream.write(v1.as_bytes())?;
+                        if self.refdata.is_none() {
+                            for v in vals {
+                                if let Some(ref v1) = v.0 {
+                                    if !v1.is_empty() {
+                                        format(tab_nums + 2, stream)?;
+                                        stream.write("public const sbyte ".as_bytes())?;
+                                        stream.write(v1.as_bytes())?;
+                                        stream.write(" = ".as_bytes())?;
+                                        stream.write(v.1.to_string().as_bytes())?;
+                                        stream.write(";".as_bytes())?;
+                                        stream.write(end.as_bytes())?;
+                                    }
+                                }
                             }
-                            stream.write(" = ".as_bytes())?;
-                            stream.write(v.1.to_string().as_bytes())?;
-                            stream.write(";".as_bytes())?;
-                            stream.write(end.as_bytes())?;
+                        } else {
+                            let refdata = self.refdata.as_ref().unwrap();
+                            for v in vals {
+                                if let (Some(ref v0), Some(ref v2)) = (&v.0, &v.2) {
+                                    if !v0.is_empty() {
+                                        if refdata.data.contains_key(v2.as_str()) {
+                                            format(tab_nums + 2, stream)?;
+                                            stream.write("public const sbyte ".as_bytes())?;
+                                            stream.write(v0.as_bytes())?;
+                                            stream.write(" = ".as_bytes())?;
+                                            stream.write(refdata.data[v2.as_str()].to_string().as_bytes())?;
+                                            stream.write(";".as_bytes())?;
+                                            stream.write(end.as_bytes())?;
+                                        } else {
+                                            self.additionals.borrow_mut().push(Some(v2.clone()));
+                                        }
+                                    }
+                                }
+                            }
                         }
+
                         format(tab_nums + 1, stream)?;
                         stream.write("}".as_bytes())?;
                         stream.write(end.as_bytes())?;
@@ -318,7 +348,7 @@ impl CodeGenerator for BaseClass {
                     stream.write("// 预期为有效 Id 但仍然访问不到数据时".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
-                stream.write("GameData.Utilities.AdaptableLog.TagWarning(GetType().FullName, $\"index {id} is not in range [0, {_dataArray.Count}) and is not defined in _extraDataMap (count: {_extraDataMap.Count})\");".as_bytes())?;
+                    stream.write("GameData.Utilities.AdaptableLog.TagWarning(GetType().FullName, $\"index {id} is not in range [0, {_dataArray.Count}) and is not defined in _extraDataMap (count: {_extraDataMap.Count})\");".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("return null;".as_bytes())?;
@@ -499,6 +529,23 @@ impl CodeGenerator for BaseClass {
                     stream.write("}".as_bytes())?;
                 }
             }
+        }
+
+        // re-write ref.txt
+        if self.refdata.is_some() {
+            let refdata = self.refdata.as_ref().unwrap();
+            let mut file = OpenOptions::new().append(true).open(refdata.file.clone())?;
+            let mut num = refdata.max_num;
+
+            for v in self.additionals.borrow().iter() {
+                let vv = v.as_ref().unwrap();
+                file.write(vv.as_bytes())?;
+                file.write(end.as_bytes())?;
+                file.write(num.to_string().as_bytes())?;
+                num += 1;
+                file.write(end.as_bytes())?;
+            }
+            file.flush()?;
         }
 
         Ok(())
