@@ -16,7 +16,7 @@ pub struct BaseClass {
     pub required_fields: Option<Weak<RefCell<Vec<ItemStr>>>>,
     pub keytypes: Option<Weak<RefCell<KeyType>>>,
     pub refdata: Option<RefData>,
-    pub additionals: RefCell<Vec<ItemStr>>
+    pub additionals: RefCell<Vec<ItemStr>>,
 }
 
 impl Default for BaseClass {
@@ -29,7 +29,7 @@ impl Default for BaseClass {
             required_fields: None,
             keytypes: None,
             refdata: None,
-            additionals: RefCell::from(Vec::default())
+            additionals: RefCell::from(Vec::default()),
         }
     }
 }

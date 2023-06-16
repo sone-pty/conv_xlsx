@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::{Error, ErrorKind, Result, Write},
-    rc::Rc, path::Path,
+    rc::Rc, path::Path, fs::File
 };
 use std::path::PathBuf;
 use std::fs;
@@ -16,17 +16,16 @@ use base_class::BaseClass;
 mod base_class;
 
 use cell_value::CellValue;
-
-use self::fk_value::{FKValue, RawValData};
 mod cell_value;
 
-//use fk_value::FKValue;
+use self::fk_value::{FKValue, RawValData};
 mod fk_value;
 
 mod stack;
 mod bm_search;
 
 type LSMap = Rc<RefCell<HashMap<Rc<String>, usize>>>;
+type ENMap = Rc<RefCell<HashMap<ItemStr, ItemStr>>>;
 
 trait CodeGenerator {
     fn gen_code<W: Write + ?Sized>(&self, end: &'static str, tab_nums: i32, stream: &mut W) -> Result<()>;
@@ -60,6 +59,7 @@ pub struct Parser {
     required_fields: Rc<RefCell<Vec<ItemStr>>>,
     key_type: Rc<RefCell<KeyType>>,
     skip_cols: Vec<usize>,
+    enmap: Rc<RefCell<HashMap<String, ENMap>>>
 }
 
 impl CodeGenerator for Parser {
@@ -123,7 +123,8 @@ impl Parser {
             vals: Rc::from(RefCell::from(VarData::default())),
             key_type: Rc::from(RefCell::from(KeyType::None)),
             skip_cols: Vec::default(),
-            required_fields: Rc::from(RefCell::from(Vec::default()))
+            required_fields: Rc::from(RefCell::from(Vec::default())),
+            enmap: Rc::from(RefCell::from(HashMap::<String, ENMap>::default()))
         }
     }
 
@@ -131,8 +132,33 @@ impl Parser {
         self.item_class.name = String::from(base_name);
         self.base_class.name = String::from(base_name);
         self.base_class.refdata = refdata;
-        let table = Self::get_table_with_id(path, "Template")?;
-        self.parse_template(table);
+        
+        let file = ExcelFile::load_from_path(path);
+        if let Ok(mut ff) = file {
+            match ff.parse_workbook() {
+                Ok(ret) => {
+                    let mut template_table = Option::<ExcelTable>::None;
+                    for (name, id) in ret.into_iter() {
+                        if let Ok(table) = ff.parse_sheet(*id) {
+                            match name.as_str() {
+                                "Template" => { template_table = Some(table); },
+                                v if v.starts_with("t_") => { self.parse_enum(table, &name[2..], base_name)?; }
+                                _ => {}
+                            }
+                        }
+                    }
+                    template_table.map(|table| self.parse_template(table, base_name));
+                },
+                Err(e) => {
+                    return Err(Error::new(ErrorKind::Other, e));
+                }
+            }
+        } else if let Err(e) = file {
+            return Err(Error::new(ErrorKind::Other, e));
+        } else {
+            return Err(Error::new(ErrorKind::Other, "load from xlsx file failed"));
+        }
+
         Ok(())
     }
 
@@ -167,7 +193,45 @@ impl Parser {
 
     //------------------------private---------------------------------
 
-    fn parse_template(&mut self, table: ExcelTable) {
+    fn parse_enum(&mut self, table: ExcelTable, enum_name: &str, base_name: &str) -> Result<()> {
+        let height = table.height();
+        let en_map = ENMap::default();
+        
+        let dest = format!("{}/E{}{}.cs", OUTPUT_ENUM_CODE_DIR, base_name, enum_name);
+        if let Ok(mut file) = File::create(dest) {
+            file.write("#pragma warning disable 1591".as_bytes())?;
+            file.write(LINE_END_FLAG.as_bytes())?;
+            file.write(LINE_END_FLAG.as_bytes())?;
+            file.write("/// <summary>".as_bytes())?;
+            file.write(LINE_END_FLAG.as_bytes())?;
+            file.write_fmt(format_args!("/// {} -> {}{}", base_name, enum_name, LINE_END_FLAG))?;
+            file.write("/// </summary>".as_bytes())?;
+            file.write(LINE_END_FLAG.as_bytes())?;
+            file.write_fmt(format_args!("public enum E{}{}{}", base_name, enum_name, LINE_END_FLAG))?;
+            file.write("{".as_bytes())?;
+            file.write(LINE_END_FLAG.as_bytes())?;
+
+            for row in 0..height {
+                if let (Some(ident), Some(val), Some(desc)) = 
+                    (table.cell(ENUM_COL_IDENT, row), table.cell(ENUM_COL_VAL, row), table.cell(ENUM_COL_DESC, row)) {
+                    file.write_fmt(format_args!("{}/// <summary>{}", '\t', LINE_END_FLAG))?;
+                    file.write_fmt(format_args!("{}/// {}{}", '\t', desc, LINE_END_FLAG))?;
+                    file.write_fmt(format_args!("{}/// </summary>{}", '\t', LINE_END_FLAG))?;
+                    file.write_fmt(format_args!("{}{} = {},{}", '\t', ident, val, LINE_END_FLAG))?;
+                    en_map.borrow_mut().insert(Some(desc.clone()), Some(ident.clone()));
+                }
+            }
+
+            file.write_fmt(format_args!("{}Count{}", '\t', LINE_END_FLAG))?;
+            file.write("}".as_bytes())?;
+            file.flush()?;
+            self.enmap.borrow_mut().insert(String::from(enum_name), en_map);
+        }
+
+        Ok(())
+    }
+
+    fn parse_template(&mut self, table: ExcelTable, base_name: &str) {
         let width = table.width();
         let height = table.height();
         let ls_map: LSMap = Rc::from(RefCell::from(HashMap::with_capacity(64)));
@@ -272,9 +336,9 @@ impl Parser {
                     Entry::Vacant(e) => {
                         let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
                         if !fk_default.is_empty() {
-                            e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map)));
+                            e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
                         } else {
-                            e.insert(Box::new(CellValue::new(default, &ty, &ls_map)));
+                            e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
                         }
                     }
                 }
@@ -291,9 +355,9 @@ impl Parser {
                             Entry::Occupied(mut e) => {
                                 let fk_v = fk_value.get_value(col, row);
                                 if !fk_v.is_empty() {
-                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_v)), &ty, &ls_map)));
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_v)), &ty, &ls_map, &ident, &self.enmap, base_name)));
                                 } else {
-                                    e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map)));
+                                    e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map, &ident, &self.enmap, base_name)));
                                 }
                             }
                             Entry::Vacant(_) => {}
@@ -305,12 +369,12 @@ impl Parser {
                                 if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
                                     let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
                                     if !fk_default.is_empty() {
-                                        e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map)));
+                                        e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
                                     } else {
-                                        e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map)));
+                                        e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
                                     }
                                 } else {
-                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map)));
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map, &ident, &self.enmap, base_name)));
                                 }
                             }
                             Entry::Vacant(_) => {}
@@ -323,6 +387,7 @@ impl Parser {
         // item_class
         self.item_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.item_class.vals = Some(Rc::downgrade(&self.vals));
+        self.item_class.enmaps = Some(Rc::downgrade(&self.enmap));
         // base_class
         self.base_class.lines = height - DATA_START_ROW - 1;
         self.base_class.defaults = Some(Rc::downgrade(&self.defaults));

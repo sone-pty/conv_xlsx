@@ -2,10 +2,10 @@
 
 mod defs;
 use defs::{
-    OUTPUT_DIR, 
+    OUTPUT_SCRIPT_CODE_DIR, 
     SOURCE_XLSXS_DIR, 
     DEFAULT_SOURCE_SUFFIX, 
-    DEFAULT_DEST_SUFFIX, REF_TEXT_DIR
+    DEFAULT_DEST_SUFFIX, REF_TEXT_DIR, OUTPUT_ENUM_CODE_DIR, LINE_END_FLAG
 };
 
 mod parser;
@@ -32,7 +32,7 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
             
             let mut parser = parser::Parser::new();
             parser.read_file(&base_name[..idx], &path, RefData::new(REF_TEXT_DIR, &base_name[..idx]))?;
-            let output_path = format!("{}/{}.{}", OUTPUT_DIR, &base_name[..idx], DEFAULT_DEST_SUFFIX);
+            let output_path = format!("{}/{}.{}", OUTPUT_SCRIPT_CODE_DIR, &base_name[..idx], DEFAULT_DEST_SUFFIX);
             let mut file = File::create(output_path)?;
             parser.generate("\r\n", &mut file)?;
         }
@@ -45,8 +45,14 @@ fn main() {
 
     match args.command {
         args::Command::Build => {
-            if let Err(_) = fs::metadata(OUTPUT_DIR) {
-                if let Err(_) = fs::create_dir_all(OUTPUT_DIR) {
+            if let Err(_) = fs::metadata(OUTPUT_SCRIPT_CODE_DIR) {
+                if let Err(_) = fs::create_dir_all(OUTPUT_SCRIPT_CODE_DIR) {
+                    exit(-1)
+                }
+            }
+            
+            if let Err(_) = fs::metadata(OUTPUT_ENUM_CODE_DIR) {
+                if let Err(_) = fs::create_dir_all(OUTPUT_ENUM_CODE_DIR) {
                     exit(-1)
                 }
             }
@@ -70,9 +76,9 @@ fn main() {
                     exit(-1)
                 }
 
-                let output_path = format!("{}/{}.{}", OUTPUT_DIR, base_name, DEFAULT_DEST_SUFFIX);
+                let output_path = format!("{}/{}.{}", OUTPUT_SCRIPT_CODE_DIR, base_name, DEFAULT_DEST_SUFFIX);
                 if let Ok(mut file) = File::create(output_path) {
-                    if let Err(e) = parser.generate("\r\n", &mut file) {
+                    if let Err(e) = parser.generate(LINE_END_FLAG, &mut file) {
                         println!("{}", e);
                         exit(-1)
                     }
@@ -82,7 +88,7 @@ fn main() {
             }
         },
         args::Command::Clean => {
-            if let Err(e) = fs::remove_dir_all(OUTPUT_DIR) {
+            if let Err(e) = fs::remove_dir_all(OUTPUT_SCRIPT_CODE_DIR) {
                 println!("{}", e);
                 exit(-1)
             }

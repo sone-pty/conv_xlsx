@@ -17,7 +17,8 @@ pub const DATA_TEMPLATE_ID_POS: (usize, usize) = (1, 3);
 
 pub type ItemStr = Option<Rc<String>>;
 
-pub const OUTPUT_DIR: &'static str = "output/";
+pub const OUTPUT_SCRIPT_CODE_DIR: &'static str = "ExportScripts/";
+pub const OUTPUT_ENUM_CODE_DIR: &'static str = "ConfigExportEnum/";
 pub const SOURCE_XLSXS_DIR: &'static str = "xlsxs/";
 pub const REF_TEXT_DIR: &'static str = "ConfigRefNameMapping/";
 
@@ -28,3 +29,11 @@ pub const DEFAULT_LINES: usize = 101;
 pub const DEFAULT_SOURCE_SUFFIX: &'static str = "xlsx";
 pub const DEFAULT_DEST_SUFFIX: &'static str = "cs";
 pub const DEFAULT_DEF_SUFFIX: &'static str = "ref.txt";
+
+// enum列属性
+pub const ENUM_COL_IDENT: usize = 0;
+pub const ENUM_COL_VAL: usize = 1;
+pub const ENUM_COL_DESC: usize = 2;
+
+// 行结束符
+pub const LINE_END_FLAG: &'static str = "\r\n";

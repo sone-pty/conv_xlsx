@@ -1,6 +1,7 @@
 /target
 Cargo.lock
-/output
+/ExportScripts
+/ConfigExportEnum
 *.xlsx
 /xlsxs
 /ConfigRefNameMapping

@@ -1,6 +1,7 @@
-use super::{CodeGenerator, DefaultData, VarData};
+use super::{CodeGenerator, DefaultData, VarData, ENMap};
 use crate::defs::ItemStr;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::{Write, Result};
 use std::rc::Weak;
 
@@ -8,7 +9,8 @@ pub struct ItemClass {
     pub name: String,
     pub items: Vec<(ItemStr, ItemStr, ItemStr)>, // (comment, identify, type)
     pub defaults: Option<Weak<RefCell<DefaultData>>>,
-    pub vals: Option<Weak<RefCell<VarData>>>
+    pub vals: Option<Weak<RefCell<VarData>>>,
+    pub enmaps: Option<Weak<RefCell<HashMap<String, ENMap>>>>
 }
 
 impl Default for ItemClass {
@@ -17,7 +19,8 @@ impl Default for ItemClass {
             name: String::default(),
             items: Vec::default(),
             defaults: None,
-            vals: None
+            vals: None,
+            enmaps: None
         }
     }
 }
@@ -72,11 +75,15 @@ impl CodeGenerator for ItemClass {
                         println!("ItemClass gen_code failed in comment");
                     }
 
-                    if let Some(item_type) = &item.2 {
+                    if let (Some(ident), Some(item_type)) = (&item.1, &item.2) {
                         format(tab_nums + 1, stream)?;
                         stream.write("public readonly ".as_bytes())?;
                         let s = item_type.clone().as_ref().clone();
-                        stream.write(replace_lstring(&s).as_bytes())?;
+                        if s == "enum" {
+                            stream.write_fmt(format_args!("E{}{}", self.name, ident))?;
+                        } else {
+                            stream.write(replace_lstring(&s).as_bytes())?;
+                        }
                         stream.write(" ".as_bytes())?;
                     } else {
                         println!("ItemClass gen_code failed in type");
@@ -106,6 +113,8 @@ impl CodeGenerator for ItemClass {
                                 stream.write("int".as_bytes())?;
                             } else if cell_ident[0].is_lstring_arr() {
                                 stream.write("int[]".as_bytes())?;
+                            } else if cell_ident[0].is_enum() {
+                                stream.write_fmt(format_args!("E{}{}", self.name, item_identify))?;
                             } else {
                                 stream.write(item_type.as_bytes())?;
                             }
@@ -139,13 +148,13 @@ impl CodeGenerator for ItemClass {
                             let countstr = count.to_string();
                             if cell_ident[0].is_lstring() {
                                 stream.write(" = LocalStringManager.GetConfig(\"".as_bytes())?;
-                                stream.write(base_name.as_bytes())?;
+                                stream.write(self.name.as_bytes())?;
                                 stream.write("_language\", arg".as_bytes())?;
                                 stream.write(countstr.as_bytes())?;
                                 stream.write(")".as_bytes())?;
                             } else if cell_ident[0].is_lstring_arr() {
                                 stream.write(" = LocalStringManager.ConvertConfigList(\"".as_bytes())?;
-                                stream.write(base_name.as_bytes())?;
+                                stream.write(self.name.as_bytes())?;
                                 stream.write("_language\", arg".as_bytes())?;
                                 stream.write(countstr.as_bytes())?;
                                 stream.write(")".as_bytes())?;

@@ -1,5 +1,5 @@
-use std::{rc::Rc, io::{Write, Result}};
-use super::{stack::Stack, LSMap};
+use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap};
+use super::{stack::Stack, LSMap, ENMap};
 
 macro_rules! get_basic_type_string {
     ($self:ident, $stream:ident, $($enum:ident::$variant:ident),+) => {
@@ -19,6 +19,7 @@ macro_rules! gen_code {
 }
 
 pub enum CellValue {
+    DEnum(EnumValue),
     DBool(BoolValue),
     DLString(LStringValue),
     DString(StringValue),
@@ -38,7 +39,7 @@ pub enum CellValue {
 
 impl CellValue {
     // TODO: process error
-    pub fn new(val: &Rc<String>, ty: &Rc<String>, ls_map: &LSMap) -> Self {
+    pub fn new(val: &Rc<String>, ty: &Rc<String>, ls_map: &LSMap, ident: &Rc<String>, enmaps: &Rc<RefCell<HashMap<String, ENMap>>>, base_name: &str) -> Self {
         let val_str = val.as_str();
         let ty_str = ty.as_str();
 
@@ -121,6 +122,17 @@ impl CellValue {
                     Self::DDouble(DoubleValue(0_f64))
                 }
             }
+            "enum" => {
+                enmaps.borrow().get(ident.as_str()).map(|map| {
+                    let binding = map.borrow();
+                    let v = binding.get(&Some(val.clone()));
+                    if v.is_none() {
+                        Self::DEnum(EnumValue(ident.clone(), Rc::default(), Rc::default()))
+                    } else {
+                        Self::DEnum(EnumValue(ident.clone(), v.as_ref().unwrap().as_ref().unwrap().clone(), Rc::from(String::from(base_name))))
+                    }
+                }).unwrap_or(Self::DEnum(EnumValue(Rc::default(), Rc::default(), Rc::default())))
+            }
             // array or list
             s if s.contains("List") || s.contains("[]") => {
                 let mut char_stack: Stack<char> = Stack::new();
@@ -194,6 +206,7 @@ impl CellValue {
         gen_code!(
             self,
             stream,
+            CellValue::DEnum,
             CellValue::DBool,
             CellValue::DByte, 
             CellValue::DSByte, 
@@ -210,6 +223,14 @@ impl CellValue {
             CellValue::DList,
             CellValue::DNone
         )
+    }
+
+    pub fn is_enum(&self) -> bool {
+        if let Self::DEnum(_) = self {
+            true
+        } else {
+            false
+        }
     }
 
     pub fn is_lstring(&self) -> bool {
@@ -252,6 +273,7 @@ impl CellValue {
         match ty.as_str() {
             "int" => Self::DInt(IntValue::default()),
             "uint" => Self::DUInt(UIntValue::default()),
+            "enum" => Self::DEnum(EnumValue::default()),
             "bool" => Self::DBool(BoolValue::default()),
             "byte" => Self::DByte(ByteValue::default()),
             "sbyte" => Self::DSByte(SByteValue::default()),
@@ -605,6 +627,9 @@ pub trait ValueInfo {
     fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()>;
 }
 #[derive(Default)]
+pub struct EnumValue(pub Rc<String>, pub Rc<String>, pub Rc<String>); // (enum_name, val, base_name)
+
+#[derive(Default)]
 pub struct BoolValue(pub bool);
 
 #[derive(Default)]
@@ -659,6 +684,17 @@ impl ValueInfo for NoneValue {
 
     fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         stream.write("none".as_bytes())?;
+        Ok(())
+    }
+}
+
+impl ValueInfo for EnumValue {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write_fmt(format_args!("E{}{}.{}", self.2, self.0, self.1))?;
+        Ok(())
+    }
+
+    fn ty<W: Write + ?Sized>(&self, _stream: &mut W) -> Result<()> {
         Ok(())
     }
 }
