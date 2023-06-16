@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::defs::{DATA_START_ROW, DEFAULT_SOURCE_SUFFIX, DATA_DEFAULT_ROW, SOURCE_XLSXS_DIR};
 
-use super::cell_value::CellValue;
+use super::cell_value::{CellValue, ShortListValue};
 use super::stack::Stack;
 
 type FKMap = HashMap<String, HashMap<Rc<String>, Rc<String>>>;
@@ -335,9 +335,9 @@ impl<'a> FKValue<'a> {
             CellValue::DArray(ref arr) => {
                 push_basic_value(&arr.0[0], rs, true);
             },
-            CellValue::DList (ref lst) => {
+            CellValue::DList(ref lst) => {
                 match &lst.0[0] {
-                    CellValue::DList(_) | CellValue::DArray(_) => { 
+                    CellValue::DList(_) | CellValue::DArray(_) | CellValue::DShortList(_) => { 
                         rs.push('{');
                         let mut idx = 1;
                         while idx < val.len() - 1 {
@@ -357,6 +357,9 @@ impl<'a> FKValue<'a> {
                     },
                     ty => { push_basic_value(ty, rs, true); }
                 }
+            },
+            CellValue::DShortList(ShortListValue(ref arr)) => {
+                push_basic_value(&arr.0[0], rs, true);
             },
             CellValue::DCustom(_) => { push_basic_value(ty, rs, false); },
             _ => { todo!("err") }

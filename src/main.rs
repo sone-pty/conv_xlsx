@@ -26,7 +26,7 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
         let path = entry?.path();
         if path.is_dir() {
             process_xlsx_dir(path)?;
-        } else {
+        } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) && !path.starts_with("~") {
             let base_name = path.file_name().unwrap().to_str().unwrap();
             let idx = base_name.find('.').unwrap_or_default();
             
@@ -34,6 +34,7 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
             parser.read_file(&base_name[..idx], &path, RefData::new(REF_TEXT_DIR, &base_name[..idx]))?;
             let output_path = format!("{}/{}.{}", OUTPUT_SCRIPT_CODE_DIR, &base_name[..idx], DEFAULT_DEST_SUFFIX);
             let mut file = File::create(output_path)?;
+            println!("Process file_name: {}", base_name);
             parser.generate("\r\n", &mut file)?;
         }
     }
@@ -89,6 +90,10 @@ fn main() {
         },
         args::Command::Clean => {
             if let Err(e) = fs::remove_dir_all(OUTPUT_SCRIPT_CODE_DIR) {
+                println!("{}", e);
+                exit(-1)
+            }
+            if let Err(e) = fs::remove_dir_all(OUTPUT_ENUM_CODE_DIR) {
                 println!("{}", e);
                 exit(-1)
             }

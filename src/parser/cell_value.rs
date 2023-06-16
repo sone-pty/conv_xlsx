@@ -1,4 +1,4 @@
-use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap};
+use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap, vec};
 use super::{stack::Stack, LSMap, ENMap};
 
 macro_rules! get_basic_type_string {
@@ -32,6 +32,7 @@ pub enum CellValue {
     DFloat(FloatValue),
     DDouble(DoubleValue),
     DCustom(CustomValue),
+    DShortList(ShortListValue),
     DArray(ArrayValue), // first element of arr is one dumb, start from index 1
     DList(ListValue),  // first element of list is one dumb, start from index 1
     DNone(NoneValue),
@@ -133,6 +134,11 @@ impl CellValue {
                     }
                 }).unwrap_or(Self::DEnum(EnumValue(Rc::default(), Rc::default(), Rc::default())))
             }
+            "ShortList" => {
+                let mut ret = Self::DShortList(ShortListValue::default());
+                collect_value(val, &mut ret, &ls_map);
+                ret
+            }
             // array or list
             s if s.contains("List") || s.contains("[]") => {
                 let mut char_stack: Stack<char> = Stack::new();
@@ -219,6 +225,7 @@ impl CellValue {
             CellValue::DString,
             CellValue::DLString,
             CellValue::DCustom,
+            CellValue::DShortList,
             CellValue::DArray,
             CellValue::DList,
             CellValue::DNone
@@ -283,6 +290,7 @@ impl CellValue {
             "double" => Self::DDouble(DoubleValue::default()),
             "string" => Self::DString(StringValue::default()),
             "LString" | "Lstring" => Self::DLString(LStringValue::default()),
+            "ShortList" => Self::DShortList(ShortListValue::default()),
             // array or list
             s if s.contains("List") || s.contains("[]") => {
                 let mut char_stack: Stack<char> = Stack::new();
@@ -368,6 +376,7 @@ impl CellValue {
             CellValue::DDouble,
             CellValue::DString,
             CellValue::DLString,
+            CellValue::DShortList,
             CellValue::DCustom
         )
     }
@@ -386,6 +395,7 @@ impl CellValue {
             "sbyte" => CellValue::DSByte(SByteValue(0)),
             "byte" => CellValue::DByte(ByteValue(0)),
             "bool" => CellValue::DBool(BoolValue(true)),
+            "ShortList" => CellValue::DShortList(ShortListValue::default()),
             "" => CellValue::DNone(NoneValue),
             custom => CellValue::DCustom(CustomValue(Rc::from(String::from(custom)), Rc::default()))
         }
@@ -428,6 +438,9 @@ impl CellValue {
             },
             CellValue::DCustom(d) => {
                 CellValue::DCustom(CustomValue(d.0.clone(), Rc::default()))
+            },
+            CellValue::DShortList(_) => {
+                CellValue::DShortList(ShortListValue::default())
             },
             CellValue::DArray(arr) => {
                 if arr.0.is_empty() {
@@ -603,7 +616,20 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
                         let mut new_lst = CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]));
                         collect_value(&filter_val[start_idx..end_idx], &mut new_lst, &ls_map);
-                        temp.push(new_lst); 
+                        temp.push(new_lst);
+                        start_idx = end_idx + 1;
+                    }
+
+                    for v in temp {
+                        list.0.push(v);
+                    }
+                },
+                CellValue::DShortList(_) => {
+                    while start_idx < filter_val.len() {
+                        let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
+                        let mut new_sl = CellValue::DShortList(ShortListValue::default());
+                        collect_value(&filter_val[start_idx..end_idx], &mut new_sl, &ls_map);
+                        temp.push(new_sl);
                         start_idx = end_idx + 1;
                     }
 
@@ -615,6 +641,9 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                     fill_elements(&mut list.0);
                 }
             }
+        },
+        CellValue::DShortList(ShortListValue(arr)) => {
+            fill_elements(&mut arr.0);
         },
         _ => { todo!("err") }
     }
@@ -637,6 +666,13 @@ pub struct LStringValue(pub Rc<String>, pub usize);
 
 #[derive(Default)]
 pub struct StringValue(pub Rc<String>);
+
+pub struct ShortListValue(pub ArrayValue);
+impl Default for ShortListValue {
+    fn default() -> Self {
+        ShortListValue(ArrayValue(vec![CellValue::DShort(ShortValue::default())]))
+    }
+}
 
 #[derive(Default)]
 pub struct CustomValue(pub Rc<String>, pub Rc<String>); // (type_str, params)
@@ -695,6 +731,31 @@ impl ValueInfo for EnumValue {
     }
 
     fn ty<W: Write + ?Sized>(&self, _stream: &mut W) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl ValueInfo for ShortListValue {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("new ShortList(".as_bytes())?;
+        let mut cnt = 1;
+        for v in self.0.0.iter().skip(1) {
+            if let CellValue::DShort(vv) = v{
+                stream.write(vv.0.to_string().as_bytes())?;
+                if cnt < self.0.0.len()-1 {
+                    stream.write(",".as_bytes())?;
+                }
+            } else {
+                println!("ShortList value format failed");
+            }
+            cnt += 1;
+        }
+        stream.write(")".as_bytes())?;
+        Ok(())
+    }
+
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        stream.write("ShortList".as_bytes())?;
         Ok(())
     }
 }
@@ -931,11 +992,12 @@ impl ValueInfo for ListValue {
                     CellValue::DFloat(v) => { v.value(stream)?; },
                     CellValue::DDouble(v) => { v.value(stream)?; },
                     CellValue::DCustom(v) => { v.value(stream)?; },
+                    CellValue::DShortList(v) => { v.value(stream)?; }
                     CellValue::DArray(v) => { v.value(stream)?; },
                     CellValue::DList(v) => { v.value(stream)?; }
                     _ => { stream.write("".as_bytes())?; }
                 };
-                if cnt < self.0.len() {
+                if cnt < self.0.len()-1 {
                     stream.write(",".as_bytes())?;
                 }
                 cnt += 1;
