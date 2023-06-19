@@ -138,18 +138,25 @@ impl<'a> FKValue<'a> {
         let push_basic_value = |ty: &CellValue, dest: &mut String, is_arr: bool| {
             match ty {
                 CellValue::DCustom(_) => {
-                    let item_pattern = &pattern[(if is_arr {2} else {1})..pattern.len()-(if is_arr {2} else {1})].chars().filter(|c| *c != ' ').collect::<String>();
-                    let indexs = item_pattern.split(',').collect::<Vec<&str>>();
+                    let patterns = split_pattern(&pattern[if is_arr {1} else {0}..pattern.len()-(if is_arr {1} else {0})]);
+                    let mut pidx = 0;
+
                     let mut idx = if is_arr {1} else {0};
                     let mut fk_names = Vec::<String>::with_capacity(1);
 
+                    if val.is_empty() { return; }
+
                     while idx < val.len() - 1 {
+                        if pidx >= patterns.len() { pidx = patterns.len()-1; }
+                        let empty = patterns[pidx].is_empty();
+                        let item_pattern = &patterns[pidx][(if empty {0} else {1})..(if empty {0} else {patterns[pidx].len()-1})].chars().filter(|c| *c != ' ').collect::<String>();
+                        let indexs = item_pattern.split(',').collect::<Vec<&str>>();
                         let off = super::cell_value::find_block(&val[idx..]);
                         
                         if off != 0 {
                             dest.push('{');
                             let val_str = val[idx+1..idx+off-1].chars().filter(|c| *c != ' ').collect::<String>();
-                            let vals = split_value(&val_str);
+                            let vals = split_val(&val_str);
                             let mut cnt = 0;
 
                             // get fks, assert len of vals >= len of indexs
@@ -200,7 +207,9 @@ impl<'a> FKValue<'a> {
                                     } else {
                                         println!("cant find the fks by the keyname = {}", &fk_names[id]);
                                     }
-                                } else { // push original val
+                                } else if indexs[cnt].contains('#') { // push original val
+                                    self.process_cmp_value(dest, indexs[cnt], v, &fk_names);
+                                } else {
                                     dest.push_str(v);
                                 }
                                 cnt += 1;
@@ -215,6 +224,7 @@ impl<'a> FKValue<'a> {
 
                         dest.push(',');
                         idx += off + 1; // skip ','
+                        pidx += 1;
                     }
 
                     if dest.ends_with(',') { dest.remove(dest.len()-1); }
@@ -243,6 +253,43 @@ impl<'a> FKValue<'a> {
             },
             _ => { todo!("err") }
         }
+    }
+
+    fn process_cmp_value(&self, dest: &mut String, pat: &str, val: &str, fk_names: &Vec<String>) {
+        let item_pattern = &pat[1..pat.len()-1].chars().filter(|c| *c != ' ').collect::<String>();
+        let indexs = item_pattern.split(',').collect::<Vec<&str>>();
+        let val_str = val[1..val.len()-1].chars().filter(|c| *c != ' ').collect::<String>();
+        let vals = split_val(&val_str);
+        let mut cnt = 0;
+
+        dest.push('{');
+        for v in vals.iter() {
+            if cnt >= indexs.len() { cnt = indexs.len()-1; }
+            if indexs[cnt].starts_with('?') { // push table name
+                dest.push_str(v);
+            } else if indexs[cnt].starts_with('#') { // push val in fks
+                let mut id = 0;
+                if indexs[cnt].len() > 1 {
+                    if let Ok(num) = indexs[cnt][1..].parse::<usize>() {
+                        id = num;
+                    } else {
+                        println!("parse from {} to usize failed", &indexs[cnt][1..]);
+                    }
+                }
+
+                // assert id is in the [0..fk_names.len()]
+                self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]).map(|fks| {
+                    fks.get(&String::from(v)).map(|vv| {
+                        dest.push_str(vv);
+                    });
+                });
+            } else if indexs[cnt].contains('#') { // push original val
+                self.process_cmp_value(dest, indexs[cnt], v, fk_names);
+            } else {
+                dest.push_str(v);
+            }
+        }
+        dest.push('}');
     }
 
     fn format_value_2(&self, ty: &CellValue, pattern: &str, val: &str, rs: &mut String) 
@@ -401,7 +448,7 @@ fn take_and_replace_value(st: &mut Stack<char>, dest: &mut String, fks: &HashMap
     }
 }
 
-fn split_value(val: &str) -> Vec<String> {
+fn split_val(val: &str) -> Vec<String> {
     let mut ch_stack = Stack::<char>::new();
     let mut ret = Vec::<String>::default();
     let mut is_bracket = false;
@@ -428,8 +475,48 @@ fn split_value(val: &str) -> Vec<String> {
         }
     }
 
-    if ret[ret.len()-1].is_empty() { ret.remove(ret.len()-1); }
+    if !ret.is_empty() {
+        if ret[ret.len()-1].is_empty() { ret.remove(ret.len()-1); }
+    }
     if !ch_stack.is_empty() { ret.push(take_value(&mut ch_stack)); }
+
+    ret
+}
+
+fn split_pattern(pat: &str) -> Vec<&str> {
+    let mut ret = Vec::<&str>::default();
+    let mut cur = 0;
+    let mut prev = 0;
+    let mut bracket_stack = Stack::<char>::default();
+
+    for ref v in pat.chars() {
+        match v {
+            '{' => {
+                if bracket_stack.is_empty() {
+                    prev = cur;
+                }
+                bracket_stack.push(*v);
+            }
+            ',' => {
+                if bracket_stack.is_empty() {
+                    ret.push(&pat[prev..cur]);
+                }
+            },
+            '}' => {
+                if let Ok(v) = bracket_stack.pop() {
+                    if v == '{' && bracket_stack.is_empty() {
+                        ret.push(&pat[prev..]);
+                    }
+                }
+            }
+            _ => {}
+        }
+        cur += 1;
+    }
+
+    if pat.ends_with(',') {
+        ret.push("");
+    }
 
     ret
 }
