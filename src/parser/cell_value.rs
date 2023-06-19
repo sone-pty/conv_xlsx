@@ -33,6 +33,7 @@ pub enum CellValue {
     DDouble(DoubleValue),
     DCustom(CustomValue),
     DShortList(ShortListValue),
+    //DTuple(TupleValue),
     DArray(ArrayValue), // first element of arr is one dumb, start from index 1
     DList(ListValue),  // first element of list is one dumb, start from index 1
     DNone(NoneValue),
@@ -673,6 +674,9 @@ impl Default for ShortListValue {
         ShortListValue(ArrayValue(vec![CellValue::DShort(ShortValue::default())]))
     }
 }
+
+#[derive(Default)]
+pub struct TupleValue(pub Vec<CellValue>);
 
 #[derive(Default)]
 pub struct CustomValue(pub Rc<String>, pub Rc<String>); // (type_str, params)

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 xlsx-read = { path = "../xlsx-read" }
 clap = { version = "4.1.8", features = ["derive"] }
+lazy_static = "1.4.0"
 
 [profile.release]
 opt-level = 3

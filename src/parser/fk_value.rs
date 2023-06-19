@@ -117,7 +117,7 @@ impl<'a> FKValue<'a> {
         file_name.push_str(DEFAULT_SOURCE_SUFFIX);
         let xlsxs_path = super::find_file(SOURCE_XLSXS_DIR, &file_name);
 
-        if let Ok(table) = super::Parser::get_table_with_id(xlsxs_path, "Template") {
+        if let Ok(table) = super::Parser::get_table_with_id(xlsxs_path, "") {
             let mut fk_map = self.fk_map.borrow_mut();
             let mut fks = HashMap::<Rc<String>, Rc<String>>::default();
             let height = table.height();
@@ -334,7 +334,7 @@ impl<'a> FKValue<'a> {
                     let mut cnt = 0;
             
                     for v in indexs.iter() {
-                        if !v.is_empty() && !self.fk_map.borrow().contains_key(*v) {
+                        if !v.is_empty() && !self.fk_map.borrow().contains_key(*v) && !v.starts_with('{') {
                             self.read_fk_table(String::from(*v));
                         }
                     }

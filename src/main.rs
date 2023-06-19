@@ -14,21 +14,27 @@ mod reference;
 mod args;
 use args::Args;
 use clap::Parser;
+use lazy_static::lazy_static;
 use reference::RefData;
 
 use std::fs::File;
+use std::sync::{Arc, Mutex};
 use std::{fs, thread};
 use std::path::Path;
 use std::process::exit;
+
+type ThreadHandles = Arc<Mutex<Vec<thread::JoinHandle<Result<(), std::io::Error>>>>>;
 
 fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
         if path.is_dir() {
-            thread::spawn(|| -> Result<(), std::io::Error> {
+            //process_xlsx_dir(path)?;
+            let handle = thread::spawn(|| -> Result<(), std::io::Error> {
                 process_xlsx_dir(path)?;
                 Ok(())
             });
+            HANDLES.lock().unwrap().push(handle);
         } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) && !path.starts_with("~") {
             let base_name = path.file_name().unwrap().to_str().unwrap();
             let idx = base_name.find('.').unwrap_or_default();
@@ -43,6 +49,10 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
     }
     Ok(())
 }
+
+lazy_static! (
+    static ref HANDLES: ThreadHandles = Arc::new(Mutex::new(Vec::new()));
+);
 
 fn main() {
     let args = Args::parse();
@@ -61,10 +71,15 @@ fn main() {
                 }
             }
 
+
             if args.name.is_empty() {
                 if let Err(e) = process_xlsx_dir(SOURCE_XLSXS_DIR) {
                     println!("{}", e);
                     exit(-1); 
+                }
+
+                for handle in HANDLES.lock().unwrap().drain(..) {
+                    let _ = handle.join();
                 }
             } else {
                 let base_name = args.name;

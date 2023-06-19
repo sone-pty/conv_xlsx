@@ -166,13 +166,13 @@ impl Parser {
         self.gen_code(end, 0, stream)
     }
 
-    pub(crate) fn get_table_with_id<P: AsRef<Path>>(path: P ,sheet: &str) -> Result<ExcelTable> {
+    pub(crate) fn get_table_with_id<P: AsRef<Path>>(path: P, sheet: &str) -> Result<ExcelTable> {
         let file = ExcelFile::load_from_path(path);
         if let Ok(mut ff) = file {
             match ff.parse_workbook() {
                 Ok(ret) => {
                     for (name, id) in ret.into_iter() {
-                        if name == sheet {
+                        if name == sheet || sheet.is_empty() {
                             if let Ok(table) = ff.parse_sheet(*id) {
                                 return Ok(table);
                             }
@@ -218,14 +218,14 @@ impl Parser {
                     file.write_fmt(format_args!("{}/// {}{}", '\t', desc, LINE_END_FLAG))?;
                     file.write_fmt(format_args!("{}/// </summary>{}", '\t', LINE_END_FLAG))?;
                     file.write_fmt(format_args!("{}{} = {},{}", '\t', ident, val, LINE_END_FLAG))?;
-                    en_map.borrow_mut().insert(Some(desc.clone()), Some(ident.clone()));
+                    en_map.as_ref().borrow_mut().insert(Some(desc.clone()), Some(ident.clone()));
                 }
             }
 
             file.write_fmt(format_args!("{}Count{}", '\t', LINE_END_FLAG))?;
             file.write("}".as_bytes())?;
             file.flush()?;
-            self.enmap.borrow_mut().insert(String::from(enum_name), en_map);
+            self.enmap.as_ref().borrow_mut().insert(String::from(enum_name), en_map);
         }
 
         Ok(())
@@ -410,7 +410,8 @@ impl Parser {
         use std::collections::hash_map::Entry;
 
         if !is_trivial {
-            let elements: Vec<&str> = val[1..val.len()-1].split(',').collect();
+            let pre_str = val[1..val.len()-1].chars().filter(|c| *c != ' ').collect::<String>();
+            let elements: Vec<&str> = pre_str.split(',').collect();
             for v in elements {
                 match data.entry(Rc::from(String::from(v))) {
                     Entry::Occupied(_) => {}
