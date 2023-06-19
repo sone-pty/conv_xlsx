@@ -17,7 +17,7 @@ use clap::Parser;
 use reference::RefData;
 
 use std::fs::File;
-use std::fs;
+use std::{fs, thread};
 use std::path::Path;
 use std::process::exit;
 
@@ -25,7 +25,10 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
         if path.is_dir() {
-            process_xlsx_dir(path)?;
+            thread::spawn(|| -> Result<(), std::io::Error> {
+                process_xlsx_dir(path)?;
+                Ok(())
+            });
         } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) && !path.starts_with("~") {
             let base_name = path.file_name().unwrap().to_str().unwrap();
             let idx = base_name.find('.').unwrap_or_default();
