@@ -35,7 +35,6 @@ trait CodeGenerator {
 pub enum KeyType {
     None,
     DefKey(Vec<(ItemStr, usize, ItemStr)>),
-    OriginalTemplateId,
 }
 
 pub struct DefaultData(HashMap<Rc<String>, Box<CellValue>>);
@@ -263,8 +262,9 @@ impl Parser {
         let fk_value = FKValue::new(fk_data);
         fk_value.parse();
 
+        
         // check flag for (1, 3)
-        if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
+/*         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
             if v.starts_with('#') {
                 if v.contains("DefKey") {
                     self.key_type = Rc::from(RefCell::from(KeyType::DefKey(Vec::default())));
@@ -272,13 +272,18 @@ impl Parser {
                     self.key_type = Rc::from(RefCell::from(KeyType::OriginalTemplateId));
                 }
             }
-        }
+        } */
 
-        // collect skip_cols and required fields
+        let mut defkey_col = DATA_TEMPLATE_ID_POS.1;
+        // collect skip_cols and required fields and defkeys
         for col in 0..width {
             if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
                 if v.starts_with('#') {
                     self.skip_cols.push(col);
+                    if v.contains("DefKey") {
+                        self.key_type = Rc::from(RefCell::from(KeyType::DefKey(Vec::default())));
+                        defkey_col = col;
+                    }
                 } else {
                     self.required_fields.as_ref().borrow_mut().push(Some(v.clone()));
                 }
@@ -399,7 +404,7 @@ impl Parser {
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = *self.key_type.as_ref().borrow_mut() {
             for row in DATA_START_ROW..height-1 {
-                if let (Some(v0), Some(v1)) = (table.cell(0, row), table.cell(DATA_TEMPLATE_ID_POS.0, row)) {
+                if let (Some(v0), Some(v1)) = (table.cell(0, row), table.cell(defkey_col, row)) {
                     vec.push((Some(v1.clone()), row - DATA_START_ROW, Some(v0.clone())));
                 }
             }
