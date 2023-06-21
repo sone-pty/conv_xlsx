@@ -327,7 +327,7 @@ impl<'a> FKValue<'a> {
                             _ => { ch_stack.push(v); }
                         }
                     }
-                },
+                }
                 CellValue::DCustom(_) => {
                     let item_pattern = &pattern[(if is_arr {2} else {1})..pattern.len()-(if is_arr {2} else {1})].chars().filter(|c| *c != ' ').collect::<String>();
                     let indexs = item_pattern.split(',').collect::<Vec<&str>>();
@@ -357,7 +357,7 @@ impl<'a> FKValue<'a> {
                                     }
 
                                     if v == '}' {
-                                        braces -= 1; 
+                                        braces -= 1;
                                         cnt = 0;
                                     } else {
                                         cnt += 1;
@@ -373,7 +373,82 @@ impl<'a> FKValue<'a> {
                             _ => { ch_stack.push(v); }
                         }
                     }
-                },
+                }
+                CellValue::DTuple(_) => {
+                    let item_pattern = &pattern[(if is_arr {2} else {1})..pattern.len()-(if is_arr {2} else {1})].chars().filter(|c| *c != ' ').collect::<String>();
+                    let indexs = item_pattern.split(',').collect::<Vec<&str>>();
+                    let mut cnt;
+                    let mut idx = 0;
+                    let items = split_val(&val[(if is_arr {1} else {0})..val.len()-(if is_arr {1} else {0})]);
+                    if is_arr { dest.push('{'); }
+
+                    for v in indexs.iter() {
+                        if !v.is_empty() && !self.fk_map.borrow().contains_key(*v) && !v.starts_with('{') {
+                            self.read_fk_table(String::from(*v));
+                        }
+                    }
+
+                    if !indexs.is_empty() {
+                        if indexs[0].is_empty() {
+                            let nums = indexs.len() - 1;
+
+                            for v in items.iter() {
+                                cnt = nums;
+                                dest.push('{');
+                                let vs = split_val(&v[1..v.len()-1]);
+
+                                for i in 0..vs.len() - nums {
+                                    dest.push_str(&vs[i]);
+                                    dest.push(',');
+                                }
+
+                                for i in nums..vs.len() {
+                                    if cnt >= indexs.len() { cnt = indexs.len()-1; }
+                                    if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
+                                        if let Some(vv) = fks.get(&vs[i]) {
+                                            dest.push_str(vv);
+                                        }
+                                    } else if indexs[cnt].is_empty() {
+                                        dest.push_str(&vs[i]);
+                                    }
+                                    if cnt < vs.len()-1 {
+                                        dest.push(',');
+                                    }
+                                    cnt += 1;
+                                }
+                                dest.push('}');
+                            }
+                        } else {
+                            for v in items.iter() {
+                                cnt = 0;
+                                let vs = split_val(&v[1..v.len()-1]);
+
+                                dest.push('{');
+                                for vv in vs.iter() {
+                                    if cnt >= indexs.len() { cnt = indexs.len()-1; }
+                                    if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
+                                        if let Some(vv) = fks.get(vv) {
+                                            dest.push_str(vv);
+                                        }
+                                    } else if indexs[cnt].is_empty() {
+                                        dest.push_str(vv);
+                                    }
+                                    if cnt < vs.len()-1 {
+                                        dest.push(',');
+                                    }
+                                    cnt += 1;
+                                }
+                                dest.push('}');
+                                if idx < items.len()-1 {
+                                    dest.push(',');
+                                }
+                                idx += 1;
+                            }
+                        }
+                    }
+
+                    if is_arr { dest.push('}'); }
+                }
                 _ => { todo!("err") }
             }
         };
@@ -448,7 +523,7 @@ fn take_and_replace_value(st: &mut Stack<char>, dest: &mut String, fks: &HashMap
     }
 }
 
-fn split_val(val: &str) -> Vec<String> {
+pub fn split_val(val: &str) -> Vec<String> {
     let mut ch_stack = Stack::<char>::new();
     let mut ret = Vec::<String>::default();
     let mut is_bracket = false;
@@ -458,19 +533,20 @@ fn split_val(val: &str) -> Vec<String> {
             '{' => {
                 ch_stack.push(v);
                 is_bracket = true;
-            },
+            }
             ',' => {
                 if is_bracket { 
                     ch_stack.push(v);
-                } else {
+                } else if !ch_stack.is_empty() {
                     ret.push(take_value(&mut ch_stack));
                 }
-            },
+            }
             '}' => {
                 ch_stack.push(v);
                 ret.push(take_value(&mut ch_stack));
                 is_bracket = false;
-            },
+            }
+            ' ' => {}
             _ => { ch_stack.push(v); }
         }
     }

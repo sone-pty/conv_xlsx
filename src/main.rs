@@ -71,7 +71,6 @@ fn main() {
                 }
             }
 
-
             if args.name.is_empty() {
                 if let Err(e) = process_xlsx_dir(SOURCE_XLSXS_DIR) {
                     println!("{}", e);
