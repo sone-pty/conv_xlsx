@@ -383,7 +383,7 @@ impl CodeGenerator for BaseClass {
                     //--------------------------GetAllKeys-begin----------------------------------
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
-                    stream.write("public List<sbyte> GetAllKeys()".as_bytes())?;
+                    stream.write("public List<short> GetAllKeys()".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
                     stream.write("{".as_bytes())?;
