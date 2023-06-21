@@ -64,6 +64,7 @@ pub enum CellValue {
     DArray(ArrayValue), // first element of arr is one dumb, start from index 1
     DList(ListValue),  // first element of list is one dumb, start from index 1
     DNone(NoneValue),
+    DError(ErrorValue)
 }
 
 impl CellValue {
@@ -73,7 +74,7 @@ impl CellValue {
         let ty_str = ty.as_str();
 
         if val_str.is_empty() {
-            return Self::DNone(NoneValue);
+            return Self::DNone(NoneValue(ty.clone()));
         }
 
         match ty_str {
@@ -303,7 +304,7 @@ impl CellValue {
                 let mut char_stack: Stack<char> = Stack::new();
                 let mut op_stack: Stack<char> = Stack::new();
                 let mut keyword_stack: Stack<String> = Stack::new();
-                let mut ret = Self::DNone(NoneValue);
+                let mut ret = Self::DError(ErrorValue);
 
                 for c in ty_str.chars() {
                     match c {
@@ -347,7 +348,7 @@ impl CellValue {
                     ret
                 } else {
                     // TODO: err
-                    Self::DNone(NoneValue)
+                    Self::DError(ErrorValue)
                 }
             },
             // custom
@@ -378,7 +379,8 @@ impl CellValue {
             CellValue::DTuple,
             CellValue::DArray,
             CellValue::DList,
-            CellValue::DNone
+            CellValue::DNone,
+            CellValue::DError
         )
     }
 
@@ -574,7 +576,7 @@ impl CellValue {
                 let mut char_stack: Stack<char> = Stack::new();
                 let mut op_stack: Stack<char> = Stack::new();
                 let mut keyword_stack: Stack<String> = Stack::new();
-                let mut ret = Self::DNone(NoneValue);
+                let mut ret = Self::DError(ErrorValue);
 
                 let take_keyword = |st: &mut Stack<char>| -> String {
                     let mut s = String::with_capacity(10);
@@ -627,7 +629,7 @@ impl CellValue {
                     ret
                 } else {
                     // TODO: err
-                    Self::DNone(NoneValue)
+                    Self::DError(ErrorValue)
                 }
             },
             // custom
@@ -690,7 +692,7 @@ impl CellValue {
             "byte" => CellValue::DByte(ByteValue(0)),
             "bool" => CellValue::DBool(BoolValue(true)),
             "ShortList" => CellValue::DShortList(ShortListValue::default()),
-            "" => CellValue::DNone(NoneValue),
+            "" => CellValue::DError(ErrorValue),
             custom => CellValue::DCustom(CustomValue(Rc::from(String::from(custom)), Rc::default()))
         }
     }
@@ -738,19 +740,19 @@ impl CellValue {
             },
             CellValue::DArray(arr) => {
                 if arr.0.is_empty() {
-                    CellValue::DNone(NoneValue)
+                    CellValue::DError(ErrorValue)
                 } else {
                     CellValue::DArray(ArrayValue(vec![CellValue::clone_from_other_with_default(&(arr.0)[0])]))
                 }
             },
             CellValue::DList(lst) => {
                 if lst.0.is_empty() {
-                    CellValue::DNone(NoneValue)
+                    CellValue::DError(ErrorValue)
                 } else {
                     CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]))
                 }
             },
-            _ => { CellValue::DNone(NoneValue) }
+            _ => { CellValue::DError(ErrorValue) }
         }
     }
 }
@@ -1049,13 +1051,34 @@ pub struct ArrayValue(pub Vec<CellValue>);
 pub struct ListValue(pub Vec<CellValue>);
 
 #[derive(Default)]
-pub struct NoneValue;
+pub struct NoneValue(pub Rc<String>);
+
+#[derive(Default)]
+pub struct ErrorValue;
 
 //----------------------------------impl-------------------------------------------
 
+impl ValueInfo for ErrorValue {
+    fn value<W: Write + ?Sized>(&self, _stream: &mut W) -> Result<()> {
+        Ok(())
+    }
+
+    fn ty<W: Write + ?Sized>(&self, _stream: &mut W) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl ValueInfo for NoneValue {
     fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
-        stream.write("null".as_bytes())?;
+        match CellValue::get_type(&self.0) {
+            CellValue::DBool(_) => { stream.write("false".as_bytes())?; }
+            CellValue::DSByte(_) | CellValue::DLString(_) | CellValue::DInt(_) | CellValue::DShort(_) => { stream.write("-1".as_bytes())?; }
+            CellValue::DArray(_) | CellValue::DEnum(_) | CellValue::DList(_) | 
+            CellValue::DShortList(_) | CellValue::DString(_) | CellValue::DTuple(_) | CellValue::DCustom(_) => { stream.write("null".as_bytes())?; }
+            CellValue::DDouble(_) | CellValue::DFloat(_) => { stream.write("0.0".as_bytes())?; }
+            CellValue::DUInt(_) | CellValue::DByte(_) | CellValue::DUShort(_) => { stream.write("0".as_bytes())?; }
+            _ => {}
+        }
         Ok(())
     }
 

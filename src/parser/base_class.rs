@@ -1,7 +1,6 @@
 use crate::defs::{DEFAULT_LINES, ItemStr};
 use crate::reference::RefData;
 
-use super::cell_value::{CellValue, self};
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
 use std::fs::OpenOptions;
 use std::io::{Write, Result};
@@ -161,7 +160,7 @@ impl CodeGenerator for BaseClass {
                                             if let Some(defv) = map_defaults.get(d) {
                                                 defv.gen_code(stream)?;
                                             } else {
-                                                CellValue::DNone(cell_value::NoneValue).gen_code(stream)?;
+                                                vv[row].gen_code(stream)?;
                                             }
                                         } else {
                                             vv[row].gen_code(stream)?;
