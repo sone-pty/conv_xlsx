@@ -23,6 +23,7 @@ mod fk_value;
 
 mod stack;
 mod bm_search;
+mod fsm;
 
 type LSMap = Rc<RefCell<HashMap<Rc<String>, usize>>>;
 type ENMap = Rc<RefCell<HashMap<ItemStr, ItemStr>>>;

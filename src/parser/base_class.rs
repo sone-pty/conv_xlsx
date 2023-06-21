@@ -97,7 +97,7 @@ impl CodeGenerator for BaseClass {
                                 if let Some(ref v1) = v.0 {
                                     if !v1.is_empty() {
                                         format(tab_nums + 2, stream)?;
-                                        stream.write("public const sbyte ".as_bytes())?;
+                                        stream.write("public const short ".as_bytes())?;
                                         stream.write(v1.as_bytes())?;
                                         stream.write(" = ".as_bytes())?;
                                         stream.write(v.1.to_string().as_bytes())?;
@@ -113,7 +113,7 @@ impl CodeGenerator for BaseClass {
                                     if !v0.is_empty() {
                                         if refdata.data.contains_key(v2.as_str()) {
                                             format(tab_nums + 2, stream)?;
-                                            stream.write("public const sbyte ".as_bytes())?;
+                                            stream.write("public const short ".as_bytes())?;
                                             stream.write(v0.as_bytes())?;
                                             stream.write(" = ".as_bytes())?;
                                             stream.write(refdata.data[v2.as_str()].to_string().as_bytes())?;
