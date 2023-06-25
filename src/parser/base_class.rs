@@ -134,7 +134,7 @@ impl CodeGenerator for BaseClass {
                         stream.write(end.as_bytes())?;
                     }
 
-                    for term in 0..(self.lines / DEFAULT_LINES)+1 {
+                    for term in 0..(self.lines / (DEFAULT_LINES+1))+1 {
                         stream.write(end.as_bytes())?;
                         format(tab_nums + 1, stream)?;
                         stream.write("private void CreateItems".as_bytes())?;
@@ -207,8 +207,11 @@ impl CodeGenerator for BaseClass {
                     stream.write(self.name.as_bytes())?;
                     stream.write("Item>( ".as_bytes())?;
                     stream.write(self.lines.to_string().as_bytes())?;
-                    stream.write(" ) {};".as_bytes())?;
-                    for term in 0..(self.lines / DEFAULT_LINES)+1 {
+                    stream.write(" ) {".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("};".as_bytes())?;
+                    for term in 0..(self.lines / (DEFAULT_LINES+1))+1 {
                         stream.write(end.as_bytes())?;
                         format(tab_nums + 2, stream)?;
                         stream.write("CreateItems".as_bytes())?;
@@ -320,12 +323,6 @@ impl CodeGenerator for BaseClass {
                     stream.write_fmt(format_args!("Item this[int id] => GetItem(({})id);", self.id_type))?;
                     stream.write(end.as_bytes())?;
                     stream.write(end.as_bytes())?;
-                    format(tab_nums + 1, stream)?;
-                    stream.write("public ".as_bytes())?;
-                    stream.write(self.name.as_bytes())?;
-                    stream.write("Item this[string refName] => this[_refNameMap[refName]];".as_bytes())?;
-                    stream.write(end.as_bytes())?;
-                    stream.write(end.as_bytes())?;
 
                     //--------------------------GetItem-begin----------------------------------
                     format(tab_nums + 1, stream)?;
@@ -360,6 +357,13 @@ impl CodeGenerator for BaseClass {
                     stream.write(end.as_bytes())?;
                     //--------------------------GetItem-end.as_bytes()----------------------------------
                     
+                    format(tab_nums + 1, stream)?;
+                    stream.write("public ".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item this[string refName] => this[_refNameMap[refName]];".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    
                     //--------------------------RequiredFields-begin----------------------------------
                     format(tab_nums + 1, stream)?;
                     stream.write("private readonly HashSet<string> RequiredFields = new HashSet<string>()".as_bytes())?;
@@ -369,12 +373,14 @@ impl CodeGenerator for BaseClass {
                     stream.write(end.as_bytes())?;
                     for v in requires.iter() {
                         if let Some(vv) = v {
-                            format(tab_nums + 2, stream)?;
-                            stream.write("\"".as_bytes())?;
-                            stream.write(vv.as_bytes())?;
-                            stream.write("\"".as_bytes())?;
-                            stream.write(",".as_bytes())?;
-                            stream.write(end.as_bytes())?;
+                            if !map_defaults.contains_key(vv) {
+                                format(tab_nums + 2, stream)?;
+                                stream.write("\"".as_bytes())?;
+                                stream.write(vv.as_bytes())?;
+                                stream.write("\"".as_bytes())?;
+                                stream.write(",".as_bytes())?;
+                                stream.write(end.as_bytes())?;
+                            }
                         }
                     }
                     format(tab_nums + 1, stream)?;

@@ -1,3 +1,4 @@
+use super::cell_value::{CellValue, NoneValue};
 use super::{CodeGenerator, DefaultData, VarData, ENMap};
 use crate::defs::ItemStr;
 use std::cell::RefCell;
@@ -115,7 +116,19 @@ impl CodeGenerator for ItemClass {
                                 stream.write("int[]".as_bytes())?;
                             } else if cell_ident[0].is_enum() {
                                 stream.write_fmt(format_args!("E{}{}", self.name, item_identify))?;
-                            } else {
+                            } else if cell_ident[0].is_none() {
+                                if let CellValue::DNone(NoneValue(ref v)) = *cell_ident[0] {
+                                    let ty = CellValue::get_type(v);
+                                    if ty.is_lstring() {
+                                        stream.write("int".as_bytes())?;
+                                    } else if ty.is_lstring_arr() {
+                                        stream.write("int[]".as_bytes())?;
+                                    } else {
+                                        stream.write(item_type.as_bytes())?;
+                                    }
+                                }
+                            } 
+                            else {
                                 stream.write(item_type.as_bytes())?;
                             }
                         }
@@ -158,7 +171,28 @@ impl CodeGenerator for ItemClass {
                                 stream.write("_language\", arg".as_bytes())?;
                                 stream.write(countstr.as_bytes())?;
                                 stream.write(")".as_bytes())?;
-                            } else {
+                            } else if cell_ident[0].is_none() {
+                                if let CellValue::DNone(NoneValue(ref v)) = *cell_ident[0] {
+                                    let ty = CellValue::get_type(v);
+                                    if ty.is_lstring() {
+                                        stream.write(" = LocalStringManager.GetConfig(\"".as_bytes())?;
+                                        stream.write(self.name.as_bytes())?;
+                                        stream.write("_language\", arg".as_bytes())?;
+                                        stream.write(countstr.as_bytes())?;
+                                        stream.write(")".as_bytes())?;
+                                    } else if ty.is_lstring_arr() {
+                                        stream.write(" = LocalStringManager.ConvertConfigList(\"".as_bytes())?;
+                                        stream.write(self.name.as_bytes())?;
+                                        stream.write("_language\", arg".as_bytes())?;
+                                        stream.write(countstr.as_bytes())?;
+                                        stream.write(")".as_bytes())?;
+                                    } else {
+                                        stream.write(" = arg".as_bytes())?;
+                                        stream.write(countstr.as_bytes())?;
+                                    }
+                                }
+                            } 
+                            else {
                                 stream.write(" = arg".as_bytes())?;
                                 stream.write(countstr.as_bytes())?;
                             }

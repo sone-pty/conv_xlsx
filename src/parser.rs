@@ -265,7 +265,7 @@ impl Parser {
         let mut defkey_col = DATA_TEMPLATE_ID_POS.1;
         // collect skip_cols and required fields and defkeys
         for col in 0..width {
-            if let (None, Some(v)) = (table.cell(col, DATA_DEFAULT_ROW), table.cell(col, DATA_IDENTIFY_ROW)) {
+            if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
                 if v.starts_with('#') {
                     self.skip_cols.push(col);
                     if v.contains("DefKey") {
@@ -275,7 +275,7 @@ impl Parser {
                 } else {
                     self.required_fields.as_ref().borrow_mut().push(Some(v.clone()));
                 }
-            } else if let None = table.cell(col, DATA_IDENTIFY_ROW) {
+            } else {
                 self.skip_cols.push(col);
             }
         }
@@ -324,15 +324,17 @@ impl Parser {
 
             // collect defaults
             if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
-                use std::collections::hash_map::Entry;
-                match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
-                    Entry::Occupied(_) => {}
-                    Entry::Vacant(e) => {
-                        let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
-                        if !fk_default.is_empty() {
-                            e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
-                        } else {
-                            e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                if default.as_str() != "None" {
+                    use std::collections::hash_map::Entry;
+                    match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
+                        Entry::Occupied(_) => {}
+                        Entry::Vacant(e) => {
+                            let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
+                            if !fk_default.is_empty() {
+                                e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                            } else {
+                                e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                            }
                         }
                     }
                 }
@@ -368,7 +370,7 @@ impl Parser {
                                         e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
                                     }
                                 } else {
-                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::default()), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::default(), &ty, &ls_map, &ident, &self.enmap, base_name)));
                                 }
                             }
                             Entry::Vacant(_) => {}

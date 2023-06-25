@@ -73,7 +73,7 @@ impl CellValue {
         let val_str = val.as_str();
         let ty_str = ty.as_str();
 
-        if val_str.is_empty() {
+        if val_str.is_empty() || val_str == "None" {
             return Self::DNone(NoneValue(ty.clone()));
         }
 
