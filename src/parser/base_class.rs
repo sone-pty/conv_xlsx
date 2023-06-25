@@ -4,7 +4,7 @@ use crate::reference::RefData;
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
 use std::fs::OpenOptions;
 use std::io::{Write, Result};
-use std::rc::Weak;
+use std::rc::{Weak, Rc};
 use std::cell::RefCell;
 
 pub struct BaseClass {
@@ -16,6 +16,7 @@ pub struct BaseClass {
     pub keytypes: Option<Weak<RefCell<KeyType>>>,
     pub refdata: Option<RefData>,
     pub additionals: RefCell<Vec<ItemStr>>,
+    pub id_type: Rc<String>
 }
 
 impl Default for BaseClass {
@@ -29,6 +30,7 @@ impl Default for BaseClass {
             keytypes: None,
             refdata: None,
             additionals: RefCell::from(Vec::default()),
+            id_type: Rc::default()
         }
     }
 }
@@ -97,7 +99,7 @@ impl CodeGenerator for BaseClass {
                                 if let Some(ref v1) = v.0 {
                                     if !v1.is_empty() {
                                         format(tab_nums + 2, stream)?;
-                                        stream.write("public const short ".as_bytes())?;
+                                        stream.write_fmt(format_args!("public const {} ", self.id_type))?;
                                         stream.write(v1.as_bytes())?;
                                         stream.write(" = ".as_bytes())?;
                                         stream.write(v.1.to_string().as_bytes())?;
@@ -113,7 +115,7 @@ impl CodeGenerator for BaseClass {
                                     if !v0.is_empty() {
                                         if refdata.data.contains_key(v2.as_str()) {
                                             format(tab_nums + 2, stream)?;
-                                            stream.write("public const short ".as_bytes())?;
+                                            stream.write_fmt(format_args!("public const {} ", self.id_type))?;
                                             stream.write(v0.as_bytes())?;
                                             stream.write(" = ".as_bytes())?;
                                             stream.write(refdata.data[v2.as_str()].to_string().as_bytes())?;
@@ -309,13 +311,13 @@ impl CodeGenerator for BaseClass {
                     format(tab_nums + 1, stream)?;
                     stream.write("public ".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write("Item this[sbyte id] => GetItem(id);".as_bytes())?;
+                    stream.write_fmt(format_args!("Item this[{} id] => GetItem(id);", self.id_type))?;
                     stream.write(end.as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
                     stream.write("public ".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write("Item this[int id] => GetItem((sbyte)id);".as_bytes())?;
+                    stream.write_fmt(format_args!("Item this[int id] => GetItem(({})id);", self.id_type))?;
                     stream.write(end.as_bytes())?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
@@ -329,7 +331,7 @@ impl CodeGenerator for BaseClass {
                     format(tab_nums + 1, stream)?;
                     stream.write("public ".as_bytes())?;
                     stream.write(self.name.as_bytes())?;
-                    stream.write("Item GetItem(sbyte id)".as_bytes())?;
+                    stream.write_fmt(format_args!("Item GetItem({} id)", self.id_type))?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
                     stream.write("{".as_bytes())?;
@@ -383,7 +385,7 @@ impl CodeGenerator for BaseClass {
                     //--------------------------GetAllKeys-begin----------------------------------
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
-                    stream.write("public List<short> GetAllKeys()".as_bytes())?;
+                    stream.write_fmt(format_args!("public List<{}> GetAllKeys()", self.id_type))?;
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 1, stream)?;
                     stream.write("{".as_bytes())?;

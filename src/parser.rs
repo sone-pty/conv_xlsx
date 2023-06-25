@@ -262,22 +262,10 @@ impl Parser {
         let fk_value = FKValue::new(fk_data);
         fk_value.parse();
 
-        
-        // check flag for (1, 3)
-/*         if let Some(v) = table.cell(DATA_TEMPLATE_ID_POS.0, DATA_TEMPLATE_ID_POS.1) {
-            if v.starts_with('#') {
-                if v.contains("DefKey") {
-                    self.key_type = Rc::from(RefCell::from(KeyType::DefKey(Vec::default())));
-                } else {
-                    self.key_type = Rc::from(RefCell::from(KeyType::OriginalTemplateId));
-                }
-            }
-        } */
-
         let mut defkey_col = DATA_TEMPLATE_ID_POS.1;
         // collect skip_cols and required fields and defkeys
         for col in 0..width {
-            if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
+            if let (None, Some(v)) = (table.cell(col, DATA_DEFAULT_ROW), table.cell(col, DATA_IDENTIFY_ROW)) {
                 if v.starts_with('#') {
                     self.skip_cols.push(col);
                     if v.contains("DefKey") {
@@ -287,7 +275,7 @@ impl Parser {
                 } else {
                     self.required_fields.as_ref().borrow_mut().push(Some(v.clone()));
                 }
-            } else {
+            } else if let None = table.cell(col, DATA_IDENTIFY_ROW) {
                 self.skip_cols.push(col);
             }
         }
@@ -400,6 +388,9 @@ impl Parser {
         self.base_class.vals = Some(Rc::downgrade(&self.vals));
         self.base_class.required_fields = Some(Rc::downgrade(&self.required_fields));
         self.base_class.keytypes = Some(Rc::downgrade(&self.key_type));
+        if let Some(v) = table.cell(0, 4) {
+            self.base_class.id_type = v.clone();
+        }
 
         // collect DefKey in col 1, data start frow row 8
         if let KeyType::DefKey(ref mut vec) = *self.key_type.as_ref().borrow_mut() {
