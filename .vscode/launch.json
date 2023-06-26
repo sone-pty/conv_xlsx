@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["AdventureType", "b"],
+            "args": ["test", "b"],
             "cwd": "${workspaceFolder}"
         }
     ]

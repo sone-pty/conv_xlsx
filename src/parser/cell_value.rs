@@ -794,19 +794,19 @@ fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap) {
             } else if e == "1" {
                 arr.push(CellValue::DBool( BoolValue(true) ));
             } else {
-                if let Err(err) = e.parse::<bool>().map(|v| arr.push(CellValue::DBool( BoolValue(v) ))) {
-                    println!("{}: src val= {}", err, e);
+                if let Err(_err) = e.parse::<bool>().map(|v| arr.push(CellValue::DBool( BoolValue(v) ))) {
+                    //println!("{}: src val= {}", err, e);
                 }
             }
         },
         CellValue::DByte(_) => {
-            if let Err(err) = e.parse::<u8>().map(|v| arr.push(CellValue::DByte( ByteValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<u8>().map(|v| arr.push(CellValue::DByte( ByteValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DInt(_) => {
-            if let Err(err) = e.parse::<i32>().map(|v| arr.push(CellValue::DInt( IntValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<i32>().map(|v| arr.push(CellValue::DInt( IntValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DLString(_) => {
@@ -814,40 +814,40 @@ fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap) {
             if ls_data.contains_key(&key) {
                 arr.push(CellValue::DLString(LStringValue(key.clone(), ls_data[&key])))
             } else {
-                println!("LString translate err");
+                //println!("LString translate err");
             }
         },
         CellValue::DShort(_) => {
-            if let Err(err) = e.parse::<i16>().map(|v| arr.push(CellValue::DShort( ShortValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<i16>().map(|v| arr.push(CellValue::DShort( ShortValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DSByte(_) => {
-            if let Err(err) = e.parse::<i8>().map(|v| arr.push(CellValue::DSByte( SByteValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<i8>().map(|v| arr.push(CellValue::DSByte( SByteValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DFloat(_) => {
-            if let Err(err) = e.parse::<f32>().map(|v| arr.push(CellValue::DFloat( FloatValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<f32>().map(|v| arr.push(CellValue::DFloat( FloatValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DDouble(_) => {
-            if let Err(err) = e.parse::<f64>().map(|v| arr.push(CellValue::DDouble( DoubleValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<f64>().map(|v| arr.push(CellValue::DDouble( DoubleValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DString(_) => {
             arr.push(CellValue::DString( StringValue(Rc::new(e.to_string())) ));
         },
         CellValue::DUInt(_) => {
-            if let Err(err) = e.parse::<u32>().map(|v| arr.push(CellValue::DUInt( UIntValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<u32>().map(|v| arr.push(CellValue::DUInt( UIntValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         CellValue::DUShort(_) => {
-            if let Err(err) = e.parse::<u16>().map(|v| arr.push(CellValue::DUShort( UShortValue(v) ))) {
-                println!("{}: src val= {}", err, e);
+            if let Err(_err) = e.parse::<u16>().map(|v| arr.push(CellValue::DUShort( UShortValue(v) ))) {
+                //println!("{}: src val= {}", err, e);
             }
         },
         _ => { todo!("err") }
@@ -916,7 +916,7 @@ fn collect_vec_value(arr: &mut Vec<CellValue>, ls_map: &LSMap, filter_val: &Stri
     } else {
         let elements: Vec<&str> = filter_val[1..filter_val.len()-1].split(',').collect();
         for e in elements {
-            if e.is_empty() { continue; }
+            // if e.is_empty() { continue; }
             // match type, assert arr is not empty
             collect_basic_value(e, arr, ls_map);
         }
@@ -1074,7 +1074,8 @@ impl ValueInfo for NoneValue {
             CellValue::DBool(_) => { stream.write("false".as_bytes())?; }
             CellValue::DSByte(_) | CellValue::DLString(_) | CellValue::DInt(_) | CellValue::DShort(_) => { stream.write("-1".as_bytes())?; }
             CellValue::DArray(_) | CellValue::DEnum(_) | CellValue::DList(_) | 
-            CellValue::DShortList(_) | CellValue::DString(_) | CellValue::DTuple(_) | CellValue::DCustom(_) => { stream.write("null".as_bytes())?; }
+            CellValue::DShortList(_) | CellValue::DTuple(_) | CellValue::DCustom(_) => { stream.write("null".as_bytes())?; }
+            CellValue::DString(_) => { stream.write("\"\"".as_bytes())?; }
             CellValue::DDouble(_) | CellValue::DFloat(_) => { stream.write("0.0".as_bytes())?; }
             CellValue::DUInt(_) | CellValue::DByte(_) | CellValue::DUShort(_) => { stream.write("0".as_bytes())?; }
             _ => {}
@@ -1155,7 +1156,7 @@ impl ValueInfo for LStringValue {
 impl ValueInfo for StringValue {
     fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         if self.0.is_empty() {
-            stream.write("null".as_bytes())?;
+            stream.write("\"\"".as_bytes())?;
         } else if self.0.as_str() == "\"\"" {
             stream.write("\"\"".as_bytes())?;
         } else if self.0.as_str().contains("\"") {
@@ -1224,7 +1225,9 @@ impl ValueInfo for UIntValue {
 
 impl ValueInfo for FloatValue {
     fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
-        stream.write(self.0.to_string().as_bytes())?;
+        stream.write_fmt(format_args!("{:E}f", self.0))?;
+        //stream.write(self.0.to_string().as_bytes())?;
+        //stream.write("f".as_bytes())?;
         Ok(())
     }
 
@@ -1236,7 +1239,9 @@ impl ValueInfo for FloatValue {
 
 impl ValueInfo for DoubleValue {
     fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
-        stream.write(self.0.to_string().as_bytes())?;
+        stream.write_fmt(format_args!("{:E}d", self.0))?;
+        //stream.write(self.0.to_string().as_bytes())?;
+        //stream.write("d".as_bytes())?;
         Ok(())
     }
 

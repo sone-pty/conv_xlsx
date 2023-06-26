@@ -2,6 +2,7 @@ use crate::defs::{DEFAULT_LINES, ItemStr};
 use crate::reference::RefData;
 
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::{Write, Result};
 use std::rc::{Weak, Rc};
@@ -16,7 +17,8 @@ pub struct BaseClass {
     pub keytypes: Option<Weak<RefCell<KeyType>>>,
     pub refdata: Option<RefData>,
     pub additionals: RefCell<Vec<ItemStr>>,
-    pub id_type: Rc<String>
+    pub id_type: Rc<String>,
+    pub nodefs: Weak<RefCell<HashSet<Rc<String>>>>
 }
 
 impl Default for BaseClass {
@@ -30,7 +32,8 @@ impl Default for BaseClass {
             keytypes: None,
             refdata: None,
             additionals: RefCell::from(Vec::default()),
-            id_type: Rc::default()
+            id_type: Rc::default(),
+            nodefs: Weak::default()
         }
     }
 }
@@ -45,10 +48,11 @@ impl CodeGenerator for BaseClass {
         };
 
         if let (Some(weak_defaults), Some(weak_vars), Some(weak_keys)) = (&self.defaults, &self.vals, &self.keytypes) {
-            if let (Some(up_defaults), Some(up_vars), Some(up_keys)) = (weak_defaults.upgrade(), weak_vars.upgrade(), weak_keys.upgrade()) {
+            if let (Some(up_defaults), Some(up_vars), Some(up_keys), Some(nodefs)) = (weak_defaults.upgrade(), weak_vars.upgrade(), weak_keys.upgrade(), self.nodefs.upgrade()) {
                 let map_defaults = &up_defaults.as_ref().borrow().0;
                 let map_vars = &up_vars.as_ref().borrow().0;
                 let keys = up_keys.as_ref().borrow();
+                let nodefs = nodefs.as_ref().borrow();
 
                 if let Some(rfds) = self.required_fields.as_ref().unwrap().upgrade() {
                     let requires = &rfds.as_ref().borrow();
@@ -373,7 +377,7 @@ impl CodeGenerator for BaseClass {
                     stream.write(end.as_bytes())?;
                     for v in requires.iter() {
                         if let Some(vv) = v {
-                            if !map_defaults.contains_key(vv) {
+                            if nodefs.contains(vv) {
                                 format(tab_nums + 2, stream)?;
                                 stream.write("\"".as_bytes())?;
                                 stream.write(vv.as_bytes())?;

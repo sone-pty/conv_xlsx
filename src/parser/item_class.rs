@@ -72,8 +72,6 @@ impl CodeGenerator for ItemClass {
                 for item in self.items.iter() {
                     if let Some(item_comment) = &item.0 {
                         comment(item_comment, stream)?;
-                    } else {
-                        println!("ItemClass gen_code failed in comment");
                     }
 
                     if let (Some(ident), Some(item_type)) = (&item.1, &item.2) {

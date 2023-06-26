@@ -1,7 +1,7 @@
 use crate::{defs::*, reference::RefData};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{Error, ErrorKind, Result, Write},
     rc::Rc, path::Path, fs::File
 };
@@ -59,7 +59,8 @@ pub struct Parser {
     required_fields: Rc<RefCell<Vec<ItemStr>>>,
     key_type: Rc<RefCell<KeyType>>,
     skip_cols: Vec<usize>,
-    enmap: Rc<RefCell<HashMap<String, ENMap>>>
+    enmap: Rc<RefCell<HashMap<String, ENMap>>>,
+    nodefs: Rc<RefCell<HashSet<Rc<String>>>>
 }
 
 impl CodeGenerator for Parser {
@@ -124,7 +125,8 @@ impl Parser {
             key_type: Rc::from(RefCell::from(KeyType::None)),
             skip_cols: Vec::default(),
             required_fields: Rc::from(RefCell::from(Vec::default())),
-            enmap: Rc::from(RefCell::from(HashMap::<String, ENMap>::default()))
+            enmap: Rc::from(RefCell::from(HashMap::<String, ENMap>::default())),
+            nodefs: Rc::default()
         }
     }
 
@@ -320,24 +322,34 @@ impl Parser {
                     Some(ident.clone()),
                     Some(ty.clone()),
                 ));
+            } else {
+                self.item_class.items.push((
+                    None,
+                    Some(ident.clone()),
+                    Some(ty.clone()),
+                ));
             }
 
             // collect defaults
             if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
-                if default.as_str() != "None" {
-                    use std::collections::hash_map::Entry;
-                    match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
-                        Entry::Occupied(_) => {}
-                        Entry::Vacant(e) => {
-                            let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
-                            if !fk_default.is_empty() {
-                                e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
-                            } else {
-                                e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
-                            }
+                use std::collections::hash_map::Entry;
+                match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
+                    Entry::Occupied(_) => {}
+                    Entry::Vacant(e) => {
+                        let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
+                        if !fk_default.is_empty() {
+                            e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                        } else {
+                            e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
                         }
                     }
                 }
+
+                if default.as_str() == "None" || default.as_str() == "{}" {
+                    self.nodefs.as_ref().borrow_mut().insert(ident.clone());
+                }
+            } else {
+                self.nodefs.as_ref().borrow_mut().insert(ident.clone());
             }
 
             // collect vars
@@ -390,6 +402,7 @@ impl Parser {
         self.base_class.vals = Some(Rc::downgrade(&self.vals));
         self.base_class.required_fields = Some(Rc::downgrade(&self.required_fields));
         self.base_class.keytypes = Some(Rc::downgrade(&self.key_type));
+        self.base_class.nodefs = Rc::downgrade(&self.nodefs);
         if let Some(v) = table.cell(0, 4) {
             self.base_class.id_type = v.clone();
         }
@@ -405,6 +418,7 @@ impl Parser {
     }
 
     fn pre_process_lstring<'a>(ls_map: &LSMap, val: &str, is_trivial: bool, ls_seed: &'a mut usize) {
+        if val.is_empty() { return; }
         let mut data = ls_map.as_ref().borrow_mut();
         use std::collections::hash_map::Entry;
 
