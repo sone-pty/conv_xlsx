@@ -61,6 +61,7 @@ pub enum CellValue {
     DCustom(CustomValue),
     DShortList(ShortListValue),
     DTuple(TupleValue),
+    DValueTuple(ValueTupleValue),
     DArray(ArrayValue), // first element of arr is one dumb, start from index 1
     DList(ListValue),  // first element of list is one dumb, start from index 1
     DNone(NoneValue),
@@ -167,6 +168,137 @@ impl CellValue {
                 let mut ret = Self::DShortList(ShortListValue::default());
                 collect_value(val, &mut ret, &ls_map);
                 ret
+            }
+            s if s.contains("ValueTuple") => {
+                let mut ch_stack = Stack::<char>::new();
+                // 0-List, 1-Tuple
+                let mut key_stack = Stack::<u8>::new();
+                let mut obj_stack = Stack::<CellValue>::new();
+
+                for v in s.chars() {
+                    match v {
+                        '<' => {
+                            let key = Self::take_keyword(&mut ch_stack);
+                            match &key[..] {
+                                "ValueTuple" => {
+                                    key_stack.push(1);
+                                    obj_stack.push(Self::DValueTuple(ValueTupleValue::default()));
+                                }
+                                "List" => {
+                                    key_stack.push(0);
+                                    obj_stack.push(Self::DList(ListValue::default()));
+                                }
+                                _ => {}
+                            }
+                        }
+                        // in tuple
+                        ',' => {
+                            if !ch_stack.is_empty() {
+                                if let Some(ValueTupleValue(data)) = obj_stack.peek_mut().unwrap().get_valuetuple_ref_value() {
+                                    let key = Self::take_keyword(&mut ch_stack);
+                                    data.push(Self::basic_default_value(&key));
+                                }
+                            }
+                        }
+                        '>' => {
+                            if let Ok(k) = key_stack.pop() {
+                                if k == 0 {
+                                    // list
+                                    if let Some(ListValue(mut data)) = obj_stack.pop().unwrap().get_list_value() {
+                                        if !ch_stack.is_empty() {
+                                            let key = Self::take_keyword(&mut ch_stack);
+                                            data.push(Self::basic_default_value(&key));
+                                        }
+
+                                        if let Some(idx) = key_stack.peek() {
+                                            if *idx == 0 {
+                                                obj_stack.peek_mut().map(|varr| {
+                                                    if let Some(ListValue(varr)) = varr.get_list_ref_value() {
+                                                        varr.push(Self::DList(ListValue(data)));
+                                                    }
+                                                });
+                                            } else {
+                                                obj_stack.peek_mut().map(|varr| {
+                                                    if let Some(ValueTupleValue(varr)) = varr.get_valuetuple_ref_value() {
+                                                        varr.push(Self::DList(ListValue(data)));
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            obj_stack.push(Self::DList(ListValue(data)));
+                                            key_stack.push(0);
+                                        }
+                                    } else {
+                                        todo!("err")
+                                    }
+                                } else if k == 1 {
+                                    // tuple
+                                    if let Some(ValueTupleValue(mut data)) = obj_stack.pop().unwrap().get_valuetuple_value() {
+                                        if !ch_stack.is_empty() {
+                                            let key = Self::take_keyword(&mut ch_stack);
+                                            data.push(Self::basic_default_value(&key));
+                                        }
+
+                                        if let Some(idx) = key_stack.peek() {
+                                            if *idx == 0 {
+                                                obj_stack.peek_mut().map(|varr| {
+                                                    if let Some(ListValue(varr)) = varr.get_list_ref_value() {
+                                                        varr.push(Self::DValueTuple(ValueTupleValue(data)));
+                                                    }
+                                                });
+                                            } else {
+                                                obj_stack.peek_mut().map(|varr| {
+                                                    if let Some(ValueTupleValue(varr)) = varr.get_valuetuple_ref_value() {
+                                                        varr.push(Self::DValueTuple(ValueTupleValue(data)));
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            obj_stack.push(Self::DValueTuple(ValueTupleValue(data)));
+                                            key_stack.push(1);
+                                        }
+                                    } else {
+                                        todo!("err")
+                                    }
+                                }
+                            }
+                        }
+                        ']' => {
+                            if !ch_stack.is_empty() {
+                                let key = Self::take_keyword(&mut ch_stack);
+                                if let Some(idx) = key_stack.peek() {
+                                    if *idx == 0 {
+                                        if let Some(ListValue(data)) = obj_stack.peek_mut().unwrap().get_list_ref_value() {
+                                            data.push(Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)])));
+                                        }
+                                    } else {
+                                        if let Some(ValueTupleValue(data)) = obj_stack.peek_mut().unwrap().get_valuetuple_ref_value() {
+                                            data.push(Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)])));
+                                        }
+                                    }
+                                } else {
+                                    obj_stack.push(Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)])));
+                                }
+                            } else if let Ok(idx) = key_stack.pop() {
+                                if idx == 1 {
+                                    if let Some(ValueTupleValue(data)) = obj_stack.pop().unwrap().get_valuetuple_value() {
+                                        obj_stack.push(Self::DArray(ArrayValue(vec![Self::DValueTuple(ValueTupleValue(data))])));
+                                    }
+                                }
+                            } else {
+                                todo!("err")
+                            }
+                        }
+                        // skip whitespace && '['
+                        ' ' | '[' => {}
+                        _ => { ch_stack.push(v); }
+                    }
+                }
+
+                obj_stack.pop().map(|mut v| {
+                    collect_value(val, &mut v, ls_map);
+                    v
+                }).unwrap()
             }
             s if s.contains("Tuple") => {
                 let mut ch_stack = Stack::<char>::new();
@@ -377,6 +509,7 @@ impl CellValue {
             CellValue::DCustom,
             CellValue::DShortList,
             CellValue::DTuple,
+            CellValue::DValueTuple,
             CellValue::DArray,
             CellValue::DList,
             CellValue::DNone,
@@ -643,6 +776,7 @@ impl CellValue {
 
     // getters
     define_getters!(get_tuple_value, get_tuple_ref_value, DTuple, TupleValue);
+    define_getters!(get_valuetuple_value, get_valuetuple_ref_value, DValueTuple, ValueTupleValue);
     define_getters!(get_list_value, get_list_ref_value, DList, ListValue);
     // getters
 
@@ -673,7 +807,8 @@ impl CellValue {
             CellValue::DLString,
             CellValue::DShortList,
             CellValue::DCustom,
-            CellValue::DTuple
+            CellValue::DTuple,
+            CellValue::DValueTuple
         )
     }
 
@@ -913,6 +1048,47 @@ fn collect_vec_value(arr: &mut Vec<CellValue>, ls_map: &LSMap, filter_val: &Stri
         for v in temp {
             arr.push(v);
         }
+    } else if let CellValue::DValueTuple(ref v) = arr[0] {
+        let vals = split_val(&filter_val[1..filter_val.len()-1]);
+        let mut idx;
+        let mut temp = Vec::<CellValue>::default();
+
+        for s in vals.iter() {
+            idx = 0;
+            let vs = split_val(&s[1..s.len()-1]);
+            if vs.len() != v.0.len() { continue; }
+            let mut tuple = ValueTupleValue::default();
+
+            for item in v.0.iter() {
+                match item {
+                    CellValue::DBool(BoolValue(_)) => { tuple.0.push(CellValue::DBool(BoolValue(vs[idx].parse::<bool>().unwrap()))) }
+                    CellValue::DByte(ByteValue(_)) => { tuple.0.push(CellValue::DByte(ByteValue(vs[idx].parse::<u8>().unwrap()))) }
+                    CellValue::DSByte(SByteValue(_)) => { tuple.0.push(CellValue::DSByte(SByteValue(vs[idx].parse::<i8>().unwrap()))) }
+                    CellValue::DFloat(FloatValue(_)) => { tuple.0.push(CellValue::DFloat(FloatValue(vs[idx].parse::<f32>().unwrap()))) }
+                    CellValue::DDouble(DoubleValue(_)) => { tuple.0.push(CellValue::DDouble(DoubleValue(vs[idx].parse::<f64>().unwrap()))) }
+                    CellValue::DInt(IntValue(_)) => { tuple.0.push(CellValue::DInt(IntValue(vs[idx].parse::<i32>().unwrap()))) }
+                    CellValue::DUInt(UIntValue(_)) => { tuple.0.push(CellValue::DUInt(UIntValue(vs[idx].parse::<u32>().unwrap()))) }
+                    CellValue::DShort(ShortValue(_)) => { tuple.0.push(CellValue::DShort(ShortValue(vs[idx].parse::<i16>().unwrap()))) }
+                    CellValue::DUShort(UShortValue(_)) => { tuple.0.push(CellValue::DUShort(UShortValue(vs[idx].parse::<u16>().unwrap()))) }
+                    CellValue::DString(StringValue(_)) => { tuple.0.push(CellValue::DString(StringValue(Rc::from(String::from(&vs[idx]))))) }
+                    CellValue::DLString(LStringValue(_, _)) => {
+                        let key = Rc::from(String::from(&vs[idx]));
+                        if ls_data.contains_key(&key) {
+                            tuple.0.push(CellValue::DLString(LStringValue(key.clone(), ls_data[&key])));
+                        } else {
+                            println!("LString translate err");
+                        }
+                    }
+                    _ => { todo!("err") }
+                }
+                idx += 1;
+            }
+            temp.push(CellValue::DValueTuple(tuple));
+        }
+
+        for v in temp {
+            arr.push(v);
+        }
     } else {
         let elements: Vec<&str> = filter_val[1..filter_val.len()-1].split(',').collect();
         for e in elements {
@@ -1016,6 +1192,9 @@ impl Default for ShortListValue {
 
 #[derive(Default)]
 pub struct TupleValue(pub Vec<CellValue>);
+
+#[derive(Default)]
+pub struct ValueTupleValue(pub Vec<CellValue>);
 
 #[derive(Default)]
 pub struct CustomValue(pub Rc<String>, pub Rc<String>); // (type_str, params)
@@ -1437,6 +1616,54 @@ impl ValueInfo for TupleValue {
     fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
         let mut cnt = 0;
         stream.write("Tuple<".as_bytes())?;
+        for v in self.0.iter() {
+            v.get_basic_type_string(stream)?;
+            if cnt < self.0.len() - 1 {
+                stream.write(",".as_bytes())?;
+            }
+            cnt += 1;
+        }
+        stream.write(">".as_bytes())?;
+        Ok(())
+    }
+}
+
+impl ValueInfo for ValueTupleValue {
+    fn value<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        let mut cnt = 0;
+        stream.write("new ".as_bytes())?;
+        self.ty(stream)?;
+        stream.write("(".as_bytes())?;
+        for v in self.0.iter() {
+            write_value_to_stream!(
+                v,
+                stream,
+                CellValue::DBool,
+                CellValue::DByte, 
+                CellValue::DSByte, 
+                CellValue::DInt, 
+                CellValue::DUInt,
+                CellValue::DFloat,
+                CellValue::DDouble,
+                CellValue::DShort, 
+                CellValue::DUShort, 
+                CellValue::DString,
+                CellValue::DLString,
+                CellValue::DCustom
+            );
+
+            if cnt < self.0.len()-1 {
+                stream.write(",".as_bytes())?;
+            }
+            cnt += 1;
+        }
+        stream.write(")".as_bytes())?;
+        Ok(())
+    }
+
+    fn ty<W: Write + ?Sized>(&self, stream: &mut W) -> Result<()> {
+        let mut cnt = 0;
+        stream.write("ValueTuple<".as_bytes())?;
         for v in self.0.iter() {
             v.get_basic_type_string(stream)?;
             if cnt < self.0.len() - 1 {
