@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     io::{Error, ErrorKind, Result, Write},
-    rc::Rc, path::Path, fs::File
+    rc::Rc, path::Path, fs::File, sync::Arc
 };
 use std::path::PathBuf;
 use std::fs;
@@ -60,7 +60,7 @@ pub struct Parser {
     key_type: Rc<RefCell<KeyType>>,
     skip_cols: Vec<usize>,
     enmap: Rc<RefCell<HashMap<String, ENMap>>>,
-    nodefs: Rc<RefCell<HashSet<Rc<String>>>>
+    nodefs: Rc<RefCell<HashSet<Rc<String>>>>,
 }
 
 impl CodeGenerator for Parser {
@@ -126,14 +126,16 @@ impl Parser {
             skip_cols: Vec::default(),
             required_fields: Rc::from(RefCell::from(Vec::default())),
             enmap: Rc::from(RefCell::from(HashMap::<String, ENMap>::default())),
-            nodefs: Rc::default()
+            nodefs: Rc::default(),
         }
     }
 
-    pub fn read_file<P: AsRef<Path>>(&mut self, base_name: &str, path: P, refdata: Option<RefData>) -> Result<()> {
+    pub fn read_file<P: AsRef<Path>>(&mut self, base_name: &str, path: P, refdata: Option<Arc<RefData>>) -> Result<()> {
         self.item_class.name = String::from(base_name);
         self.base_class.name = String::from(base_name);
-        self.base_class.refdata = refdata;
+        if refdata.is_some() {
+            self.base_class.refdata = Some(refdata.unwrap().clone());
+        }
         
         let file = ExcelFile::load_from_path(path);
         if let Ok(mut ff) = file {

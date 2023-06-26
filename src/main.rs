@@ -1,6 +1,7 @@
 #![feature(string_remove_matches)]
 
 mod defs;
+use dashmap::DashMap;
 use defs::{
     OUTPUT_SCRIPT_CODE_DIR, 
     SOURCE_XLSXS_DIR, 
@@ -24,6 +25,7 @@ use std::path::Path;
 use std::process::exit;
 
 type ThreadHandles = Arc<Mutex<Vec<thread::JoinHandle<Result<(), std::io::Error>>>>>;
+type RefDataMap = DashMap<String, Arc<RefData>>;
 
 fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
     for entry in fs::read_dir(dir)? {
@@ -40,7 +42,16 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
             let idx = base_name.find('.').unwrap_or_default();
             
             let mut parser = parser::Parser::new();
-            parser.read_file(&base_name[..idx], &path, RefData::new(REF_TEXT_DIR, &base_name[..idx]))?;
+            if let Some(refdata) = RefData::new(REF_TEXT_DIR, &base_name[..idx]) {
+                let aref = Arc::from(refdata);
+                if !RDM.contains_key(&base_name[..idx]) {
+                    RDM.insert(String::from(&base_name[..idx]), aref.clone());
+                }
+                parser.read_file(&base_name[..idx], &path, Some(aref))?;
+            } else {
+                parser.read_file(&base_name[..idx], &path, None)?;
+            }
+
             let output_path = format!("{}/{}.{}", OUTPUT_SCRIPT_CODE_DIR, &base_name[..idx], DEFAULT_DEST_SUFFIX);
             let mut file = File::create(output_path)?;
             println!("Process file_name: {}", base_name);
@@ -52,6 +63,7 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
 
 lazy_static! (
     static ref HANDLES: ThreadHandles = Arc::new(Mutex::new(Vec::new()));
+    static ref RDM: RefDataMap = DashMap::default();
 );
 
 fn main() {
@@ -89,9 +101,16 @@ fn main() {
 
                 let mut parser = parser::Parser::new();
 
-                if let Err(e) = parser.read_file(&base_name, xlsx_path, RefData::new(REF_TEXT_DIR, &base_name)) {
-                    println!("{}", e);
-                    exit(-1)
+                if let Some(refdata) = RefData::new(REF_TEXT_DIR, &base_name) {
+                    if let Err(e) = parser.read_file(&base_name, xlsx_path, Some(Arc::from(refdata))) {
+                        println!("{}", e);
+                        exit(-1);
+                    }
+                } else {
+                    if let Err(e) = parser.read_file(&base_name, xlsx_path, None) {
+                        println!("{}", e);
+                        exit(-1);
+                    }
                 }
 
                 let output_path = format!("{}/{}.{}", OUTPUT_SCRIPT_CODE_DIR, base_name, DEFAULT_DEST_SUFFIX);

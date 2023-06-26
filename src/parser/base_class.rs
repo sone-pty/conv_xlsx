@@ -7,6 +7,7 @@ use std::fs::OpenOptions;
 use std::io::{Write, Result};
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
+use std::sync::Arc;
 
 pub struct BaseClass {
     pub name: String,
@@ -15,7 +16,7 @@ pub struct BaseClass {
     pub lines: usize,
     pub required_fields: Option<Weak<RefCell<Vec<ItemStr>>>>,
     pub keytypes: Option<Weak<RefCell<KeyType>>>,
-    pub refdata: Option<RefData>,
+    pub refdata: Option<Arc<RefData>>,
     pub additionals: RefCell<Vec<ItemStr>>,
     pub id_type: Rc<String>,
     pub nodefs: Weak<RefCell<HashSet<Rc<String>>>>

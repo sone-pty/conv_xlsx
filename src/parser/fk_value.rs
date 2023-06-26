@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::RDM;
 use crate::defs::{DATA_START_ROW, DEFAULT_SOURCE_SUFFIX, DATA_DEFAULT_ROW, SOURCE_XLSXS_DIR};
 
 use super::cell_value::{CellValue, ShortListValue};
@@ -82,7 +83,7 @@ impl<'a> FKValue<'a> {
                     match v {
                         '{' => { rs.push(v); },
                         '}' | ',' | '，'=> {
-                            take_and_replace_value(&mut ch_stack, &mut rs, fks);
+                            take_and_replace_value(&mut ch_stack, &mut rs, fks, &base_name);
                             rs.push(v);
                         },
                         _ => {
@@ -91,7 +92,7 @@ impl<'a> FKValue<'a> {
                     }
                 }
                 if !ch_stack.is_empty() {
-                    take_and_replace_value(&mut ch_stack, &mut rs, fks);
+                    take_and_replace_value(&mut ch_stack, &mut rs, fks, &base_name);
                 }
             } else {
                 println!("cant find fk table: {}.xlsx", &base_name);
@@ -200,12 +201,18 @@ impl<'a> FKValue<'a> {
                                     }
 
                                     // assert id is in the [0..fk_names.len()]
-                                    if let Some(fks) = self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]) {
-                                        if let Some(vv) = fks.get(&String::from(v)) {
-                                            dest.push_str(vv);
-                                        }
+                                    if let Some(r) = RDM.get(&fk_names[id][1..fk_names[id].len()-1]) {
+                                        r.value().as_ref().data.get(v).map(|vv| {
+                                            dest.push_str(&vv.to_string());
+                                        });
                                     } else {
-                                        println!("cant find the fks by the keyname = {}", &fk_names[id]);
+                                        if let Some(fks) = self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]) {
+                                            if let Some(vv) = fks.get(v) {
+                                                dest.push_str(vv);
+                                            }
+                                        } else {
+                                            println!("cant find the fks by the keyname = {}", &fk_names[id]);
+                                        }
                                     }
                                 } else if indexs[cnt].contains('#') { // push original val
                                     self.process_cmp_value(dest, indexs[cnt], v, &fk_names);
@@ -278,11 +285,17 @@ impl<'a> FKValue<'a> {
                 }
 
                 // assert id is in the [0..fk_names.len()]
-                self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]).map(|fks| {
-                    fks.get(&String::from(v)).map(|vv| {
-                        dest.push_str(vv);
+                if let Some(r) = RDM.get(&fk_names[id][1..fk_names[id].len()-1]) {
+                    r.value().as_ref().data.get(v).map(|vv| {
+                        dest.push_str(&vv.to_string());
                     });
-                });
+                } else {
+                    self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]).map(|fks| {
+                        fks.get(v).map(|vv| {
+                            dest.push_str(vv);
+                        });
+                    });
+                }
             } else if indexs[cnt].contains('#') { // push original val
                 self.process_cmp_value(dest, indexs[cnt], v, fk_names);
             } else {
@@ -317,7 +330,7 @@ impl<'a> FKValue<'a> {
                                     cnt = indexs.len() - 1;
                                 }
                                 if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
-                                    take_and_replace_value(&mut ch_stack, dest, fks);
+                                    take_and_replace_value(&mut ch_stack, dest, fks, indexs[cnt]);
                                 } else if indexs[cnt].is_empty() {
                                     dest.push_str(&take_value(&mut ch_stack));
                                 }
@@ -361,7 +374,7 @@ impl<'a> FKValue<'a> {
                                     if braces == (if is_arr {1} else {0}) && v == ',' { dest.push(v); continue; }
 
                                     if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
-                                        take_and_replace_value(&mut ch_stack, dest, fks);
+                                        take_and_replace_value(&mut ch_stack, dest, fks, indexs[cnt]);
                                     } else if indexs[cnt].is_empty() {
                                         dest.push_str(&take_value(&mut ch_stack));
                                     }
@@ -375,7 +388,7 @@ impl<'a> FKValue<'a> {
                                 } else if indexs[cnt].starts_with('{') {
                                     tmp = &indexs[cnt][1..indexs[cnt].len()-1];
                                     self.fk_map.borrow().get(tmp).map(|fks| {
-                                        take_and_replace_value(&mut ch_stack, dest, fks);
+                                        take_and_replace_value(&mut ch_stack, dest, fks, tmp);
                                     });
                                     if v == '}' { braces -= 1; }
                                 } else {
@@ -419,16 +432,25 @@ impl<'a> FKValue<'a> {
 
                                 for i in nums..vs.len() {
                                     if cnt >= indexs.len() { cnt = indexs.len()-1; }
-                                    if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
-                                        if let Some(vv) = fks.get(&vs[i]) {
-                                            dest.push_str(vv);
+
+                                    if let Some(r) = RDM.get(indexs[cnt]) {
+                                        r.value().as_ref().data.get(&vs[i]).map(|vv| {
+                                            dest.push_str(&vv.to_string());
+                                        });
+                                    } else {
+                                        if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
+                                            if let Some(vv) = fks.get(&vs[i]) {
+                                                dest.push_str(vv);
+                                            }
+                                        } else if indexs[cnt].is_empty() {
+                                            dest.push_str(&vs[i]);
                                         }
-                                    } else if indexs[cnt].is_empty() {
-                                        dest.push_str(&vs[i]);
                                     }
+
                                     if cnt < vs.len()-1 {
                                         dest.push(',');
                                     }
+
                                     cnt += 1;
                                 }
                                 dest.push('}');
@@ -441,16 +463,25 @@ impl<'a> FKValue<'a> {
                                 dest.push('{');
                                 for vv in vs.iter() {
                                     if cnt >= indexs.len() { cnt = indexs.len()-1; }
-                                    if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
-                                        if let Some(vv) = fks.get(vv) {
+
+                                    if let Some(r) = RDM.get(indexs[cnt]) {
+                                        r.value().as_ref().data.get(vv).map(|val| {
+                                            dest.push_str(&val.to_string());
+                                        });
+                                    } else {
+                                        if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
+                                            if let Some(vv) = fks.get(vv) {
+                                                dest.push_str(vv);
+                                            }
+                                        } else if indexs[cnt].is_empty() {
                                             dest.push_str(vv);
                                         }
-                                    } else if indexs[cnt].is_empty() {
-                                        dest.push_str(vv);
                                     }
+
                                     if cnt < vs.len()-1 {
                                         dest.push(',');
                                     }
+
                                     cnt += 1;
                                 }
                                 dest.push('}');
@@ -519,7 +550,7 @@ fn take_value(st: &mut Stack<char>) -> String {
     s.chars().rev().collect()
 }
 
-fn take_and_replace_value(st: &mut Stack<char>, dest: &mut String, fks: &HashMap<Rc<String>, Rc<String>>) {
+fn take_and_replace_value(st: &mut Stack<char>, dest: &mut String, fks: &HashMap<Rc<String>, Rc<String>>, refname: &str) {
     let mut s = String::with_capacity(10);
     while !st.is_empty() {
         if let Ok(r) = st.pop() {
@@ -529,11 +560,17 @@ fn take_and_replace_value(st: &mut Stack<char>, dest: &mut String, fks: &HashMap
 
     let rev: String = s.chars().rev().collect();
     if !rev.is_empty() {
-        if let Some(vv) = fks.get(&rev) {
-            dest.push_str(vv);
+        if let Some(r) = RDM.get(refname) {
+            r.value().as_ref().data.get(&rev).map(|v| {
+                dest.push_str(&v.to_string());
+            });
         } else {
-            // TODO
-            dest.push_str("-1");
+            if let Some(vv) = fks.get(&rev) {
+                dest.push_str(vv);
+            } else {
+                // TODO
+                dest.push_str("-1");
+            }
         }
     }
 }
