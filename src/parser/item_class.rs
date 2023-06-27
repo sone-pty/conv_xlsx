@@ -227,11 +227,26 @@ impl CodeGenerator for ItemClass {
                         // default
                         format(tab_nums + 2, stream)?;
                         stream.write(item_identify.as_bytes())?;
+                        let cell_ident = map_vars.get(item_identify).unwrap();
 
                         if map_defaults.contains_key(item_identify) {
                             let val = map_defaults.get(item_identify).unwrap();
                             stream.write(" = ".as_bytes())?;
-                            val.gen_code(stream)?;
+
+                            if !cell_ident.is_empty() {
+                                if cell_ident[0].is_lstring() {
+                                    stream.write_fmt(format_args!("LocalStringManager.GetConfig(\"{}_language\", ", self.name))?;
+                                    val.gen_code(stream)?;
+                                    stream.write(")".as_bytes())?;
+                                } else if cell_ident[0].is_lstring_arr() {
+                                    stream.write_fmt(format_args!("LocalStringManager.ConvertConfigList(\"{}_language\", ", self.name))?;
+                                    val.gen_code(stream)?;
+                                    stream.write(")".as_bytes())?;
+                                } else {
+                                    val.gen_code(stream)?;
+                                }
+                            }
+
                             stream.write(";".as_bytes())?;
                         } else {
                             stream.write(" = default;".as_bytes())?;

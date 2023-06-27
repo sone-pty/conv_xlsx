@@ -57,10 +57,13 @@ lazy_static! (
         let mut ret = HashSet::<&'static str>::default();
         ret.insert("Inherit");
         ret.insert("Archive, Inherit");
+        ret.insert("Archive, Readonly");
+        ret.insert("Readonly, Inherit");
         ret.insert("Archive, Readonly, Inherit");
         ret.insert("Archive");
         ret.insert("Readonly");
-        ret.insert("FALSE");
+        ret.insert("0");
+        ret.insert("1");
         ret
     };
 );
@@ -253,9 +256,19 @@ impl Parser {
 
     fn parse_template(&mut self, table: ExcelTable, base_name: &str) {
         let width = table.width();
-        let height = table.height();
+        let mut height = table.height();
         let ls_map: LSMap = Rc::from(RefCell::from(HashMap::with_capacity(64)));
         let mut ls_seed = 0;
+
+        // get height
+        for row in 0..height {
+            if let Some(v) = table.cell(0, row) {
+                if v.contains("EOF") {
+                    height = row + 1;
+                    break;
+                }
+            }
+        }
 
         // parse FK
         let mut fk_data = Vec::<RawValData>::default();
@@ -334,7 +347,7 @@ impl Parser {
             convert_type(Rc::make_mut(&mut ty));
 
             if let Some(v) = table.cell(col, DATA_ENUM_FLAG_ROW) {
-                if !ENUM_FLAGS_FILTER.contains(v.as_str()) {
+                if !ENUM_FLAGS_FILTER.contains(v.as_str()) && v.chars().all(|c| c.is_alphabetic()) {
                     use std::collections::hash_map::Entry;
                     match self.enumflags.as_ref().borrow_mut().entry(String::from(v.as_str())) {
                         Entry::Occupied(mut e) => {
@@ -366,21 +379,21 @@ impl Parser {
 
             // collect defaults
             if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
-                use std::collections::hash_map::Entry;
-                match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
-                    Entry::Occupied(_) => {}
-                    Entry::Vacant(e) => {
-                        let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
-                        if !fk_default.is_empty() {
-                            e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
-                        } else {
-                            e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                if default.as_str() == "None" || default.as_str() == "{}" || default.is_empty() {
+                    self.nodefs.as_ref().borrow_mut().insert(ident.clone());
+                } else {
+                    use std::collections::hash_map::Entry;
+                    match self.defaults.as_ref().borrow_mut().0.entry(ident.clone()) {
+                        Entry::Occupied(_) => {}
+                        Entry::Vacant(e) => {
+                            let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
+                            if !fk_default.is_empty() {
+                                e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                            } else {
+                                e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                            }
                         }
                     }
-                }
-
-                if default.as_str() == "None" || default.as_str() == "{}" {
-                    self.nodefs.as_ref().borrow_mut().insert(ident.clone());
                 }
             } else {
                 self.nodefs.as_ref().borrow_mut().insert(ident.clone());

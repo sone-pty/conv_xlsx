@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["AvatarElements", "b"],
+            "args": ["TeaHorseCaravanEvent", "b"],
             "cwd": "${workspaceFolder}"
         }
     ]

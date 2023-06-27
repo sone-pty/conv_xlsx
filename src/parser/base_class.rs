@@ -89,14 +89,6 @@ impl CodeGenerator for BaseClass {
                     stream.write(self.name.as_bytes())?;
                     stream.write("();".as_bytes())?;
                     stream.write(end.as_bytes())?;
-                    format(tab_nums + 1, stream)?;
-                    stream.write("private readonly Dictionary<string, int> _refNameMap = new Dictionary<string, int>();".as_bytes())?;
-                    stream.write(end.as_bytes())?;
-                    format(tab_nums + 1, stream)?;
-                    stream.write("private List<".as_bytes())?;
-                    stream.write(self.name.as_bytes())?;
-                    stream.write("Item> _dataArray = null;".as_bytes())?;
-                    stream.write(end.as_bytes())?;
                     //--------------fixed code----------------------------
                 
                     // DefKey static class
@@ -148,8 +140,17 @@ impl CodeGenerator for BaseClass {
                         stream.write("}".as_bytes())?;
                         stream.write(end.as_bytes())?;
                     }
+                    
+                    format(tab_nums + 1, stream)?;
+                    stream.write("private readonly Dictionary<string, int> _refNameMap = new Dictionary<string, int>();".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("private List<".as_bytes())?;
+                    stream.write(self.name.as_bytes())?;
+                    stream.write("Item> _dataArray = null;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
 
-                    for term in 0..(self.lines / (DEFAULT_LINES+1))+1 {
+                    for term in 0..(self.lines / DEFAULT_LINES)+(if self.lines % DEFAULT_LINES == 0 {0} else {1}) {
                         stream.write(end.as_bytes())?;
                         format(tab_nums + 1, stream)?;
                         stream.write("private void CreateItems".as_bytes())?;
@@ -226,7 +227,7 @@ impl CodeGenerator for BaseClass {
                     stream.write(end.as_bytes())?;
                     format(tab_nums + 2, stream)?;
                     stream.write("};".as_bytes())?;
-                    for term in 0..(self.lines / (DEFAULT_LINES+1))+1 {
+                    for term in 0..(self.lines / DEFAULT_LINES)+(if self.lines % DEFAULT_LINES == 0 {0} else {1}) {
                         stream.write(end.as_bytes())?;
                         format(tab_nums + 2, stream)?;
                         stream.write("CreateItems".as_bytes())?;
