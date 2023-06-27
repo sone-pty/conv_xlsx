@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["b"],
+            "args": ["AvatarElements", "b"],
             "cwd": "${workspaceFolder}"
         }
     ]

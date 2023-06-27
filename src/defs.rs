@@ -12,6 +12,8 @@ pub const DATA_IDENTIFY_ROW: usize = 3;
 pub const DATA_TYPE_ROW: usize = 4;
 // 外键标识所在行
 pub const DATA_FOREIGN_KEY_ROW: usize = 5;
+// 枚举标识所在行
+pub const DATA_ENUM_FLAG_ROW: usize = 6;
 // 模版ID字段所在单元格
 pub const DATA_TEMPLATE_ID_POS: (usize, usize) = (1, 3);
 

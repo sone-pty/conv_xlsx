@@ -4,14 +4,15 @@ use crate::defs::ItemStr;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{Write, Result};
-use std::rc::Weak;
+use std::rc::{Weak, Rc};
 
 pub struct ItemClass {
     pub name: String,
     pub items: Vec<(ItemStr, ItemStr, ItemStr)>, // (comment, identify, type)
     pub defaults: Option<Weak<RefCell<DefaultData>>>,
     pub vals: Option<Weak<RefCell<VarData>>>,
-    pub enmaps: Option<Weak<RefCell<HashMap<String, ENMap>>>>
+    pub enmaps: Option<Weak<RefCell<HashMap<String, ENMap>>>>,
+    pub enumflags: Option<Weak<RefCell<HashMap<String, Vec<Rc<String>>>>>>
 }
 
 impl Default for ItemClass {
@@ -21,7 +22,8 @@ impl Default for ItemClass {
             items: Vec::default(),
             defaults: None,
             vals: None,
-            enmaps: None
+            enmaps: None,
+            enumflags: None
         }
     }
 }
@@ -49,10 +51,11 @@ impl CodeGenerator for ItemClass {
             Ok(())
         };
 
-        if let (Some(weak_defaults), Some(weak_vars)) = (&self.defaults, &self.vals) {
-            if let (Some(up_defaults), Some(up_vars)) = (weak_defaults.upgrade(), weak_vars.upgrade()) {
+        if let (Some(weak_defaults), Some(weak_vars), Some(weak_enumflags)) = (&self.defaults, &self.vals, &self.enumflags) {
+            if let (Some(up_defaults), Some(up_vars), Some(up_enumflags)) = (weak_defaults.upgrade(), weak_vars.upgrade(), weak_enumflags.upgrade()) {
                 let map_defaults = &up_defaults.borrow().0;
                 let map_vars = &up_vars.borrow().0;
+                let enumflags = up_enumflags.as_ref().borrow();
                 #[allow(unused_assignments)]
                 let mut count = 0;
                 let mut base_name = String::from(&self.name);
@@ -241,6 +244,37 @@ impl CodeGenerator for ItemClass {
                 format(tab_nums + 1, stream)?;
                 stream.write("}".as_bytes())?;
                 stream.write(end.as_bytes())?;
+
+                // enum-refs
+                for (k, arr) in enumflags.iter() {
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write_fmt(format_args!("public int Get{}BonusInt(E{}ReferencedType key){}", k, k, end))?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write_fmt(format_args!("switch (key){}", end))?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("{".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+
+                    for v in arr {
+                        format(tab_nums + 3, stream)?;
+                        stream.write_fmt(format_args!("case E{}ReferencedType.{}:return {};{}", k, v, v, end))?;
+                    }
+
+                    format(tab_nums + 2, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 2, stream)?;
+                    stream.write("return 0;".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                    format(tab_nums + 1, stream)?;
+                    stream.write("}".as_bytes())?;
+                    stream.write(end.as_bytes())?;
+                }
+                // enum-refs
 
                 format(tab_nums, stream)?;
                 stream.write("}".as_bytes())?;

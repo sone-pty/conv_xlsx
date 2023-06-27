@@ -7,6 +7,7 @@ use std::{
 };
 use std::path::PathBuf;
 use std::fs;
+use lazy_static::lazy_static;
 use xlsx_read::{excel_file::ExcelFile, excel_table::ExcelTable};
 
 use item_class::ItemClass;
@@ -51,6 +52,19 @@ impl Default for VarData {
     }
 }
 
+lazy_static! (
+    static ref ENUM_FLAGS_FILTER: HashSet<&'static str> = {
+        let mut ret = HashSet::<&'static str>::default();
+        ret.insert("Inherit");
+        ret.insert("Archive, Inherit");
+        ret.insert("Archive, Readonly, Inherit");
+        ret.insert("Archive");
+        ret.insert("Readonly");
+        ret.insert("FALSE");
+        ret
+    };
+);
+
 pub struct Parser {
     item_class: ItemClass,
     base_class: BaseClass,
@@ -61,6 +75,7 @@ pub struct Parser {
     skip_cols: Vec<usize>,
     enmap: Rc<RefCell<HashMap<String, ENMap>>>,
     nodefs: Rc<RefCell<HashSet<Rc<String>>>>,
+    enumflags: Rc<RefCell<HashMap<String, Vec<Rc<String>>>>>
 }
 
 impl CodeGenerator for Parser {
@@ -127,6 +142,7 @@ impl Parser {
             required_fields: Rc::from(RefCell::from(Vec::default())),
             enmap: Rc::from(RefCell::from(HashMap::<String, ENMap>::default())),
             nodefs: Rc::default(),
+            enumflags: Rc::default()
         }
     }
 
@@ -267,7 +283,7 @@ impl Parser {
         fk_value.parse();
 
         let mut defkey_col = DATA_TEMPLATE_ID_POS.1;
-        // collect skip_cols and required fields and defkeys
+        // collect skip_cols and required fields and defkeys and enum flags
         for col in 0..width {
             if let Some(v) = table.cell(col, DATA_IDENTIFY_ROW) {
                 if v.starts_with('#') {
@@ -316,6 +332,22 @@ impl Parser {
             let ident = table.cell(col, DATA_IDENTIFY_ROW).unwrap();
             let mut ty = table.cell(col, DATA_TYPE_ROW).unwrap().clone();
             convert_type(Rc::make_mut(&mut ty));
+
+            if let Some(v) = table.cell(col, DATA_ENUM_FLAG_ROW) {
+                if !ENUM_FLAGS_FILTER.contains(v.as_str()) {
+                    use std::collections::hash_map::Entry;
+                    match self.enumflags.as_ref().borrow_mut().entry(String::from(v.as_str())) {
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().push(ident.clone());
+                        }
+                        Entry::Vacant(e) => {
+                            let mut vec = Vec::<Rc<String>>::with_capacity(10);
+                            vec.push(ident.clone());
+                            e.insert(vec);
+                        }
+                    }
+                }
+            }
 
             // collect (comment, identify, type) in row (1, 3, 4)
             if let Some(c1) = table.cell(col, DATA_COMMENT_ROW) {
@@ -398,6 +430,7 @@ impl Parser {
         self.item_class.defaults = Some(Rc::downgrade(&self.defaults));
         self.item_class.vals = Some(Rc::downgrade(&self.vals));
         self.item_class.enmaps = Some(Rc::downgrade(&self.enmap));
+        self.item_class.enumflags = Some(Rc::downgrade(&self.enumflags));
         // base_class
         self.base_class.lines = height - DATA_START_ROW - 1;
         self.base_class.defaults = Some(Rc::downgrade(&self.defaults));
@@ -405,6 +438,7 @@ impl Parser {
         self.base_class.required_fields = Some(Rc::downgrade(&self.required_fields));
         self.base_class.keytypes = Some(Rc::downgrade(&self.key_type));
         self.base_class.nodefs = Rc::downgrade(&self.nodefs);
+        self.base_class.enumflags = Some(Rc::downgrade(&self.enumflags));
         if let Some(v) = table.cell(0, 4) {
             self.base_class.id_type = v.clone();
         }

@@ -2,7 +2,7 @@ use crate::defs::{DEFAULT_LINES, ItemStr};
 use crate::reference::RefData;
 
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fs::OpenOptions;
 use std::io::{Write, Result};
 use std::rc::{Weak, Rc};
@@ -19,7 +19,8 @@ pub struct BaseClass {
     pub refdata: Option<Arc<RefData>>,
     pub additionals: RefCell<Vec<ItemStr>>,
     pub id_type: Rc<String>,
-    pub nodefs: Weak<RefCell<HashSet<Rc<String>>>>
+    pub nodefs: Weak<RefCell<HashSet<Rc<String>>>>,
+    pub enumflags: Option<Weak<RefCell<HashMap<String, Vec<Rc<String>>>>>>
 }
 
 impl Default for BaseClass {
@@ -34,7 +35,8 @@ impl Default for BaseClass {
             refdata: None,
             additionals: RefCell::from(Vec::default()),
             id_type: Rc::default(),
-            nodefs: Weak::default()
+            nodefs: Weak::default(),
+            enumflags: None
         }
     }
 }
@@ -48,12 +50,20 @@ impl CodeGenerator for BaseClass {
             Ok(())
         };
 
-        if let (Some(weak_defaults), Some(weak_vars), Some(weak_keys)) = (&self.defaults, &self.vals, &self.keytypes) {
-            if let (Some(up_defaults), Some(up_vars), Some(up_keys), Some(nodefs)) = (weak_defaults.upgrade(), weak_vars.upgrade(), weak_keys.upgrade(), self.nodefs.upgrade()) {
+        if let (Some(weak_defaults), 
+                Some(weak_vars), 
+                Some(weak_keys), 
+                Some(weak_enumflags)) = (&self.defaults, &self.vals, &self.keytypes, &self.enumflags) {
+            if let (Some(up_defaults), 
+                    Some(up_vars), 
+                    Some(up_keys), 
+                    Some(nodefs),
+                    Some(up_enumflags)) = (weak_defaults.upgrade(), weak_vars.upgrade(), weak_keys.upgrade(), self.nodefs.upgrade(), weak_enumflags.upgrade()) {
                 let map_defaults = &up_defaults.as_ref().borrow().0;
                 let map_vars = &up_vars.as_ref().borrow().0;
                 let keys = up_keys.as_ref().borrow();
                 let nodefs = nodefs.as_ref().borrow();
+                let enumflags = up_enumflags.as_ref().borrow();
 
                 if let Some(rfds) = self.required_fields.as_ref().unwrap().upgrade() {
                     let requires = &rfds.as_ref().borrow();
@@ -368,6 +378,106 @@ impl CodeGenerator for BaseClass {
                     stream.write("Item this[string refName] => this[_refNameMap[refName]];".as_bytes())?;
                     stream.write(end.as_bytes())?;
                     stream.write(end.as_bytes())?;
+
+                    // enum-flags
+                    for (k, _) in enumflags.iter() {
+                        format(tab_nums + 1, stream)?;
+                        stream.write_fmt(format_args!("public static int Get{}Bonus(int key, E{}ReferencedType property){}", k, k, end))?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write_fmt(format_args!("return Instance._dataArray[key].Get{}BonusInt(property);{}", k, end))?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        stream.write(end.as_bytes())?;
+
+                        format(tab_nums + 1, stream)?;
+                        stream.write_fmt(format_args!("public static int Get{}Bonus(short[] keys, E{}ReferencedType property){}", k, k, end))?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("int sum = 0;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("for (int i = 0, count = keys.Length; i < count; ++i)".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 3, stream)?;
+                        stream.write_fmt(format_args!("sum += Instance._dataArray[keys[i]].Get{}BonusInt(property);{}", k, end))?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("return sum;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        stream.write(end.as_bytes())?;
+
+                        format(tab_nums + 1, stream)?;
+                        stream.write_fmt(format_args!("public static int Get{}Bonus(List<short> keys, E{}ReferencedType property){}", k, k, end))?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("int sum = 0;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("for (int i = 0, count = keys.Count; i < count; ++i)".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 3, stream)?;
+                        stream.write_fmt(format_args!("sum += Instance._dataArray[keys[i]].Get{}BonusInt(property);{}", k, end))?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("return sum;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        stream.write(end.as_bytes())?;
+
+                        format(tab_nums + 1, stream)?;
+                        stream.write_fmt(format_args!("public static int Get{}Bonus(int[] keys, E{}ReferencedType property){}", k, k, end))?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("int sum = 0;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("for (int i = 0, count = keys.Length; i < count; ++i)".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 3, stream)?;
+                        stream.write_fmt(format_args!("sum += Instance._dataArray[keys[i]].Get{}BonusInt(property);{}", k, end))?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("return sum;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        stream.write(end.as_bytes())?;
+
+                        format(tab_nums + 1, stream)?;
+                        stream.write_fmt(format_args!("public static int Get{}Bonus(List<int> keys, E{}ReferencedType property){}", k, k, end))?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("{".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("int sum = 0;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("for (int i = 0, count = keys.Count; i < count; ++i)".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 3, stream)?;
+                        stream.write_fmt(format_args!("sum += Instance._dataArray[keys[i]].Get{}BonusInt(property);{}", k, end))?;
+                        format(tab_nums + 2, stream)?;
+                        stream.write("return sum;".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        format(tab_nums + 1, stream)?;
+                        stream.write("}".as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                        stream.write(end.as_bytes())?;
+                    }
+                    // enum-flags
                     
                     //--------------------------RequiredFields-begin----------------------------------
                     format(tab_nums + 1, stream)?;
