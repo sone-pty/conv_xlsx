@@ -209,6 +209,8 @@ impl<'a> FKValue<'a> {
                                         if let Some(fks) = self.fk_map.borrow().get(&fk_names[id][1..fk_names[id].len()-1]) {
                                             if let Some(vv) = fks.get(v) {
                                                 dest.push_str(vv);
+                                            } else {
+                                                dest.push_str("-1");
                                             }
                                         } else {
                                             println!("cant find the fks by the keyname = {}", &fk_names[id]);

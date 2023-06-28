@@ -1253,8 +1253,7 @@ impl ValueInfo for NoneValue {
             CellValue::DBool(_) => { stream.write("false".as_bytes())?; }
             CellValue::DSByte(_) | CellValue::DLString(_) | CellValue::DInt(_) | CellValue::DShort(_) => { stream.write("-1".as_bytes())?; }
             CellValue::DArray(_) | CellValue::DEnum(_) | CellValue::DList(_) | 
-            CellValue::DShortList(_) | CellValue::DTuple(_) | CellValue::DCustom(_) => { stream.write("null".as_bytes())?; }
-            CellValue::DString(_) => { stream.write("\"\"".as_bytes())?; }
+            CellValue::DShortList(_) | CellValue::DTuple(_) | CellValue::DCustom(_) | CellValue::DString(_) => { stream.write("null".as_bytes())?; }
             CellValue::DDouble(_) | CellValue::DFloat(_) => { stream.write("0.0".as_bytes())?; }
             CellValue::DUInt(_) | CellValue::DByte(_) | CellValue::DUShort(_) => { stream.write("0".as_bytes())?; }
             _ => {}
@@ -1549,6 +1548,7 @@ impl ValueInfo for ListValue {
                     CellValue::DCustom,
                     CellValue::DShortList,
                     CellValue::DTuple,
+                    CellValue::DValueTuple,
                     CellValue::DArray,
                     CellValue::DList
                 );

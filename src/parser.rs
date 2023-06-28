@@ -379,7 +379,7 @@ impl Parser {
 
             // collect defaults
             if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
-                if default.as_str() == "None" || default.as_str() == "{}" || default.is_empty() {
+                if default.as_str() == "None" || default.is_empty() {
                     self.nodefs.as_ref().borrow_mut().insert(ident.clone());
                 } else {
                     use std::collections::hash_map::Entry;
@@ -475,6 +475,7 @@ impl Parser {
             let pre_str = val[1..val.len()-1].chars().filter(|c| *c != ' ').collect::<String>();
             let elements: Vec<&str> = pre_str.split(',').collect();
             for v in elements {
+                if v.is_empty() { continue; }
                 match data.entry(Rc::from(String::from(v))) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
