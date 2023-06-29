@@ -1143,9 +1143,11 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                 CellValue::DShortList(_) => {
                     while start_idx < filter_val.len() {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
-                        let mut new_sl = CellValue::DShortList(ShortListValue::default());
-                        collect_value(&filter_val[start_idx..end_idx], &mut new_sl, &ls_map);
-                        temp.push(new_sl);
+                        if end_idx != start_idx {
+                            let mut new_sl = CellValue::DShortList(ShortListValue::default());
+                            collect_value(&filter_val[start_idx..end_idx], &mut new_sl, &ls_map);
+                            temp.push(new_sl);
+                        }
                         start_idx = end_idx + 1;
                     }
 
