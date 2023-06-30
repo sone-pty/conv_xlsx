@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["test", "b"],
+            "args": ["MapArea", "b"],
             "cwd": "${workspaceFolder}"
         }
     ]

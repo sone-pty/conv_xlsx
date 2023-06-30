@@ -375,10 +375,10 @@ impl<'a> FKValue<'a> {
                                 if braces < (if is_arr {3} else {2}) {
                                     if braces == (if is_arr {1} else {0}) && v == ',' { dest.push(v); continue; }
 
-                                    if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
-                                        take_and_replace_value(&mut ch_stack, dest, fks, indexs[cnt]);
-                                    } else if indexs[cnt].is_empty() {
+                                    if indexs[cnt].is_empty() {
                                         dest.push_str(&take_value(&mut ch_stack));
+                                    } else if let Some(fks) = self.fk_map.borrow().get(indexs[cnt]) {
+                                        take_and_replace_value(&mut ch_stack, dest, fks, indexs[cnt]);
                                     }
 
                                     if v == '}' {
@@ -389,9 +389,11 @@ impl<'a> FKValue<'a> {
                                     }
                                 } else if indexs[cnt].starts_with('{') {
                                     tmp = &indexs[cnt][1..indexs[cnt].len()-1];
-                                    self.fk_map.borrow().get(tmp).map(|fks| {
+                                    if let None = self.fk_map.borrow().get(tmp).map(|fks| {
                                         take_and_replace_value(&mut ch_stack, dest, fks, tmp);
-                                    });
+                                    }) {
+                                        dest.push_str(&take_value(&mut ch_stack));
+                                    }
                                     if v == '}' { braces -= 1; }
                                 } else {
                                     dest.push_str(&take_value(&mut ch_stack));

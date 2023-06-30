@@ -1,5 +1,5 @@
 use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap, vec};
-use super::{stack::Stack, LSMap, ENMap, fk_value::split_val};
+use super::{stack::Stack, LSMap, ENMap, fk_value::split_val, LSEmptyMap};
 
 macro_rules! get_basic_type_string {
     ($self:ident, $stream:ident, $($enum:ident::$variant:ident),+) => {
@@ -69,12 +69,12 @@ pub enum CellValue {
 }
 
 impl CellValue {
-    // TODO: process error
-    pub fn new(val: &Rc<String>, ty: &Rc<String>, ls_map: &LSMap, ident: &Rc<String>, enmaps: &Rc<RefCell<HashMap<String, ENMap>>>, base_name: &str) -> Self {
+    pub fn new(val: &Rc<String>, ty: &Rc<String>, ls_map: &LSMap, ls_empty_map: &LSEmptyMap, ident: &Rc<String>, enmaps: &Rc<RefCell<HashMap<String, ENMap>>>, base_name: &str, row: usize, col: usize) -> Self {
         let val_str = val.as_str();
         let ty_str = ty.as_str();
+        let pos = (row, col);
 
-        if val_str.is_empty() || val_str == "None" {
+        if val_str.is_empty() && ty_str != "LString" && ty_str != "Lstring" || val_str == "None" {
             return Self::DNone(NoneValue(ty.clone()));
         }
 
@@ -104,10 +104,18 @@ impl CellValue {
             }
             "LString" | "Lstring" => {
                 let ls_data = ls_map.as_ref().borrow();
-                if ls_data.contains_key(val) {
-                    Self::DLString(LStringValue(val.clone(), ls_data[val]))
+                if val.is_empty() {
+                    if ls_empty_map.contains_key(&pos) && !ls_empty_map[&pos].is_empty() {
+                        Self::DLString(LStringValue(val.clone(), ls_empty_map[&pos][0]))
+                    } else {
+                        Self::DLString(LStringValue(val.clone(), -1))
+                    }
                 } else {
-                    Self::DLString(LStringValue(val.clone(), 0))
+                    if ls_data.contains_key(val) {
+                        Self::DLString(LStringValue(val.clone(), ls_data[val]))
+                    } else {
+                        Self::DLString(LStringValue(val.clone(), -1))
+                    }
                 }
             },
             "string" => Self::DString(StringValue(val.clone())),
@@ -166,7 +174,7 @@ impl CellValue {
             }
             "ShortList" => {
                 let mut ret = Self::DShortList(ShortListValue::default());
-                collect_value(val, &mut ret, &ls_map);
+                collect_value(val, &mut ret, &ls_map, &ls_empty_map, &pos);
                 ret
             }
             s if s.contains("ValueTuple") => {
@@ -296,7 +304,7 @@ impl CellValue {
                 }
 
                 obj_stack.pop().map(|mut v| {
-                    collect_value(val, &mut v, ls_map);
+                    collect_value(val, &mut v, ls_map, ls_empty_map, &pos);
                     v
                 }).unwrap()
             }
@@ -427,7 +435,7 @@ impl CellValue {
                 }
 
                 obj_stack.pop().map(|mut v| {
-                    collect_value(val, &mut v, ls_map);
+                    collect_value(val, &mut v, ls_map, ls_empty_map, &pos);
                     v
                 }).unwrap()
             }
@@ -476,7 +484,7 @@ impl CellValue {
                 }
                 
                 if op_stack.is_empty() {
-                    collect_value(val, &mut ret, &ls_map);
+                    collect_value(val, &mut ret, &ls_map, ls_empty_map, &pos);
                     ret
                 } else {
                     // TODO: err
@@ -818,7 +826,7 @@ impl CellValue {
             "short" => CellValue::DShort(ShortValue(0)),
             "ushort" => CellValue::DUShort(UShortValue(0)),
             "string" => CellValue::DString(StringValue(Rc::default())),
-            "LString" | "Lstring" => CellValue::DLString(LStringValue(Rc::default(), usize::default())),
+            "LString" | "Lstring" => CellValue::DLString(LStringValue(Rc::default(), i32::default())),
             "int" => CellValue::DInt(IntValue(0)),
             "uint" => CellValue::DUInt(UIntValue(0)),
             "float" => CellValue::DFloat(FloatValue(0_f32)),
@@ -844,7 +852,7 @@ impl CellValue {
                 CellValue::DInt(IntValue(0))
             },
             CellValue::DLString(_) => {
-                CellValue::DLString(LStringValue(Rc::default(), usize::default()))
+                CellValue::DLString(LStringValue(Rc::default(), i32::default()))
             },
             CellValue::DShort(_) => {
                 CellValue::DShort(ShortValue(0))
@@ -919,7 +927,7 @@ pub fn find_block(src: &str) -> usize {
     }
 }
 
-fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap) {
+fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap, ls_empty_map: &LSEmptyMap, pos: &(usize, usize), idx: usize) {
     let ls_data = ls_map.as_ref().borrow();
 
     match arr[0] {
@@ -945,11 +953,21 @@ fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap) {
             }
         },
         CellValue::DLString(_) => {
-            let key = Rc::from(String::from(e));
-            if ls_data.contains_key(&key) {
-                arr.push(CellValue::DLString(LStringValue(key.clone(), ls_data[&key])))
+            let key: Rc<String> = Rc::from(String::from(e));
+            if e.is_empty() {
+                ls_empty_map.get(pos).map(|v| {
+                    if idx < v.len() {
+                        arr.push(CellValue::DLString(LStringValue(key.clone(), v[idx])));
+                    } else {
+                        arr.push(CellValue::DLString(LStringValue(key.clone(), -1)));
+                    }
+                });
             } else {
-                //println!("LString translate err");
+                if ls_data.contains_key(&key) { 
+                    arr.push(CellValue::DLString(LStringValue(key.clone(), ls_data[&key])))
+                } else {
+                    arr.push(CellValue::DLString(LStringValue(key.clone(), -1)));
+                }
             }
         },
         CellValue::DShort(_) => {
@@ -989,7 +1007,7 @@ fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap) {
     }
 }
 
-fn collect_vec_value(arr: &mut Vec<CellValue>, ls_map: &LSMap, filter_val: &String) {
+fn collect_vec_value(arr: &mut Vec<CellValue>, ls_map: &LSMap, filter_val: &String, ls_empty_map: &LSEmptyMap, pos: &(usize, usize)) {
     let ls_data = ls_map.as_ref().borrow();
 
     if let CellValue::DCustom(ref v) = arr[0] {
@@ -1091,16 +1109,16 @@ fn collect_vec_value(arr: &mut Vec<CellValue>, ls_map: &LSMap, filter_val: &Stri
         }
     } else {
         let elements: Vec<&str> = filter_val[1..filter_val.len()-1].split(',').collect();
-        for e in elements {
+        for (idx, e) in elements.iter().enumerate() {
             // if e.is_empty() { continue; }
             // match type, assert arr is not empty
-            collect_basic_value(e, arr, ls_map);
+            collect_basic_value(e, arr, ls_map, ls_empty_map, pos, idx);
         }
     }
 }
 
 #[allow(dead_code)]
-fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
+fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap, ls_empty_map: &LSEmptyMap, pos: &(usize, usize)) {
     if val.is_empty() { return; }
 
     // filter whitespace
@@ -1110,16 +1128,18 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
 
     match dest {
         CellValue::DArray(arr) => {
-            collect_vec_value(&mut arr.0, ls_map, &filter_val);
+            collect_vec_value(&mut arr.0, ls_map, &filter_val, ls_empty_map, pos);
         },
         CellValue::DList(list) => {
             match (list.0)[0] {
                 CellValue::DArray(ref arr) => {
                     while start_idx < filter_val.len() {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
-                        let mut new_arr = CellValue::DArray(ArrayValue(vec![CellValue::clone_from_other_with_default(&(arr.0)[0])]));
-                        collect_value(&filter_val[start_idx..end_idx], &mut new_arr, &ls_map);
-                        temp.push(new_arr);
+                        if end_idx != start_idx {
+                            let mut new_arr = CellValue::DArray(ArrayValue(vec![CellValue::clone_from_other_with_default(&(arr.0)[0])]));
+                            collect_value(&filter_val[start_idx..end_idx], &mut new_arr, &ls_map, ls_empty_map, pos);
+                            temp.push(new_arr);
+                        }
                         start_idx = end_idx + 1;
                     }
 
@@ -1130,9 +1150,11 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                 CellValue::DList(ref lst) => {
                     while start_idx < filter_val.len() {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
-                        let mut new_lst = CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]));
-                        collect_value(&filter_val[start_idx..end_idx], &mut new_lst, &ls_map);
-                        temp.push(new_lst);
+                        if end_idx != start_idx {
+                            let mut new_lst = CellValue::DList(ListValue(vec![CellValue::clone_from_other_with_default(&(lst.0)[0])]));
+                            collect_value(&filter_val[start_idx..end_idx], &mut new_lst, &ls_map, ls_empty_map, pos);
+                            temp.push(new_lst);
+                        }
                         start_idx = end_idx + 1;
                     }
 
@@ -1145,7 +1167,7 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
                         if end_idx != start_idx {
                             let mut new_sl = CellValue::DShortList(ShortListValue::default());
-                            collect_value(&filter_val[start_idx..end_idx], &mut new_sl, &ls_map);
+                            collect_value(&filter_val[start_idx..end_idx], &mut new_sl, &ls_map, ls_empty_map, pos);
                             temp.push(new_sl);
                         }
                         start_idx = end_idx + 1;
@@ -1156,12 +1178,12 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap) {
                     }
                 },
                 _ => {
-                    collect_vec_value(&mut list.0, ls_map, &filter_val);
+                    collect_vec_value(&mut list.0, ls_map, &filter_val, ls_empty_map, pos);
                 }
             }
         },
         CellValue::DShortList(ShortListValue(arr)) => {
-            collect_vec_value(&mut arr.0, ls_map, &filter_val);
+            collect_vec_value(&mut arr.0, ls_map, &filter_val, ls_empty_map, pos);
         },
         _ => { todo!("err") }
     }
@@ -1180,7 +1202,7 @@ pub struct EnumValue(pub Rc<String>, pub Rc<String>, pub Rc<String>); // (enum_n
 pub struct BoolValue(pub bool);
 
 #[derive(Default)]
-pub struct LStringValue(pub Rc<String>, pub usize);
+pub struct LStringValue(pub Rc<String>, pub i32);
 
 #[derive(Default)]
 pub struct StringValue(pub Rc<String>);

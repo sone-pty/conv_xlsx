@@ -235,13 +235,13 @@ impl CodeGenerator for ItemClass {
 
                             if !cell_ident.is_empty() {
                                 if cell_ident[0].is_lstring() {
-                                    stream.write_fmt(format_args!("LocalStringManager.GetConfig(\"{}_language\", ", self.name))?;
-                                    val.gen_code(stream)?;
-                                    stream.write(")".as_bytes())?;
+                                    stream.write_fmt(format_args!("LocalStringManager.GetConfig(\"{}_language\", default)", self.name))?;
+                                    //val.gen_code(stream)?;
+                                    //stream.write("default)".as_bytes())?;
                                 } else if cell_ident[0].is_lstring_arr() {
-                                    stream.write_fmt(format_args!("LocalStringManager.ConvertConfigList(\"{}_language\", ", self.name))?;
-                                    val.gen_code(stream)?;
-                                    stream.write(")".as_bytes())?;
+                                    stream.write_fmt(format_args!("LocalStringManager.ConvertConfigList(\"{}_language\", default)", self.name))?;
+                                    //val.gen_code(stream)?;
+                                    //stream.write(")".as_bytes())?;
                                 } else {
                                     val.gen_code(stream)?;
                                 }

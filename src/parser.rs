@@ -1,7 +1,7 @@
 use crate::{defs::*, reference::RefData};
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, BTreeMap},
     io::{Error, ErrorKind, Result, Write},
     rc::Rc, path::Path, fs::File, sync::Arc
 };
@@ -26,7 +26,8 @@ mod stack;
 mod bm_search;
 mod fsm;
 
-type LSMap = Rc<RefCell<HashMap<Rc<String>, usize>>>;
+type LSMap = Rc<RefCell<HashMap<Rc<String>, i32>>>;
+type LSEmptyMap = BTreeMap<(usize, usize), Vec<i32>>;
 type ENMap = Rc<RefCell<HashMap<ItemStr, ItemStr>>>;
 
 trait CodeGenerator {
@@ -258,6 +259,7 @@ impl Parser {
         let width = table.width();
         let mut height = table.height();
         let ls_map: LSMap = Rc::from(RefCell::from(HashMap::with_capacity(64)));
+        let mut ls_empty_map: LSEmptyMap = BTreeMap::default();
         let mut ls_seed = 0;
 
         // get height
@@ -329,13 +331,13 @@ impl Parser {
         for row in DATA_START_ROW..height-1 {
             for td in ls_cols.iter() {
                 if let Some(data) = table.cell(td.0, row) {
-                    Self::pre_process_lstring(&ls_map, data, td.1, &mut ls_seed);
+                    Self::pre_process_lstring(&ls_map, data, td.1, &mut ls_seed, &mut ls_empty_map, row, td.0);
                 } else {
                     // empty cell
                     if let Some(default) = table.cell(td.0, DATA_DEFAULT_ROW) {
-                        Self::pre_process_lstring(&ls_map, default, td.1, &mut ls_seed);
+                        Self::pre_process_lstring(&ls_map, default, td.1, &mut ls_seed, &mut ls_empty_map, row, td.0);
                     } else {
-                        Self::pre_process_lstring(&ls_map, "", true, &mut ls_seed);
+                        Self::pre_process_lstring(&ls_map, "", td.1, &mut ls_seed, &mut ls_empty_map, row, td.0);
                     }
                 }
             }
@@ -388,9 +390,11 @@ impl Parser {
                         Entry::Vacant(e) => {
                             let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
                             if !fk_default.is_empty() {
-                                e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                e.insert(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ls_empty_map, &ident, 
+                                    &self.enmap, base_name, DATA_DEFAULT_ROW, col)));
                             } else {
-                                e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                e.insert(Box::new(CellValue::new(default, &ty, &ls_map, &ls_empty_map, &ident, 
+                                    &self.enmap, base_name, DATA_DEFAULT_ROW, col)));
                             }
                         }
                     }
@@ -410,9 +414,9 @@ impl Parser {
                             Entry::Occupied(mut e) => {
                                 let fk_v = fk_value.get_value(col, row);
                                 if !fk_v.is_empty() {
-                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_v)), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_v)), &ty, &ls_map, &ls_empty_map, &ident, &self.enmap, base_name, row, col)));
                                 } else {
-                                    e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                    e.get_mut().push(Box::new(CellValue::new(v, &ty, &ls_map, &ls_empty_map, &ident, &self.enmap, base_name, row, col)));
                                 }
                             }
                             Entry::Vacant(_) => {}
@@ -424,12 +428,12 @@ impl Parser {
                                 if let Some(default) = table.cell(col, DATA_DEFAULT_ROW) {
                                     let fk_default = fk_value.get_value(col, DATA_DEFAULT_ROW);
                                     if !fk_default.is_empty() {
-                                        e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                        e.get_mut().push(Box::new(CellValue::new(&Rc::from(String::from(fk_default)), &ty, &ls_map, &ls_empty_map, &ident, &self.enmap, base_name, row, col)));
                                     } else {
-                                        e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                        e.get_mut().push(Box::new(CellValue::new(default, &ty, &ls_map, &ls_empty_map, &ident, &self.enmap, base_name, row, col)));
                                     }
                                 } else {
-                                    e.get_mut().push(Box::new(CellValue::new(&Rc::default(), &ty, &ls_map, &ident, &self.enmap, base_name)));
+                                    e.get_mut().push(Box::new(CellValue::new(&Rc::default(), &ty, &ls_map, &ls_empty_map, &ident, &self.enmap, base_name, row, col)));
                                 }
                             }
                             Entry::Vacant(_) => {}
@@ -466,30 +470,60 @@ impl Parser {
         }
     }
 
-    fn pre_process_lstring<'a>(ls_map: &LSMap, val: &str, is_trivial: bool, ls_seed: &'a mut usize) {
-        if val.is_empty() { return; }
+    fn pre_process_lstring<'a>(ls_map: &LSMap, val: &str, is_trivial: bool, ls_seed: &'a mut i32, ls_empty_map: &mut LSEmptyMap, row: usize, col: usize) {
         let mut data = ls_map.as_ref().borrow_mut();
         use std::collections::hash_map::Entry;
+        let pos = (row, col);
 
         if !is_trivial {
+            if val.is_empty() { return; }
             let pre_str = val[1..val.len()-1].chars().filter(|c| *c != ' ').collect::<String>();
             let elements: Vec<&str> = pre_str.split(',').collect();
+            if !elements.is_empty() && elements[0] == "{}" { return; }
+
             for v in elements {
-                if v.is_empty() { continue; }
-                match data.entry(Rc::from(String::from(v))) {
+                if v.is_empty() {
+                    if !ls_empty_map.contains_key(&pos) {
+                        let mut vec = Vec::<i32>::default();
+                        vec.push(*ls_seed);
+                        *ls_seed += 1;
+                        ls_empty_map.insert(pos, vec);
+                    } else {
+                        ls_empty_map.get_mut(&pos).map(|v| {
+                            v.push(*ls_seed);
+                            *ls_seed += 1;
+                        });
+                    }
+                } else {
+                    match data.entry(Rc::from(String::from(v))) {
+                        Entry::Occupied(_) => {}
+                        Entry::Vacant(e) => {
+                            e.insert(*ls_seed);
+                            *ls_seed += 1;
+                        }
+                    }
+                }
+            }
+        } else {
+            if val.is_empty() {
+                if !ls_empty_map.contains_key(&pos) {
+                    let mut vec = Vec::<i32>::default();
+                    vec.push(*ls_seed);
+                    *ls_seed += 1;
+                    ls_empty_map.insert(pos, vec);
+                } else {
+                    ls_empty_map.get_mut(&pos).map(|v| {
+                        v.push(*ls_seed);
+                        *ls_seed += 1;
+                    });
+                }
+            } else {
+                match data.entry(Rc::from(String::from(val))) {
                     Entry::Occupied(_) => {}
                     Entry::Vacant(e) => {
                         e.insert(*ls_seed);
                         *ls_seed += 1;
                     }
-                }
-            }
-        } else {
-            match data.entry(Rc::from(String::from(val))) {
-                Entry::Occupied(_) => {}
-                Entry::Vacant(e) => {
-                    e.insert(*ls_seed);
-                    *ls_seed += 1;
                 }
             }
         }
