@@ -18,6 +18,7 @@ use clap::Parser;
 use lazy_static::lazy_static;
 use reference::RefData;
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread};
@@ -39,6 +40,9 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
             HANDLES.lock().unwrap().push(handle);
         } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) && !path.starts_with("~") {
             let base_name = path.file_name().unwrap().to_str().unwrap();
+            if FILE_NAME_FILTER.contains(base_name) {
+                continue;
+            }
             let idx = base_name.find('.').unwrap_or_default();
             
             let mut parser = parser::Parser::new();
@@ -64,6 +68,14 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
 lazy_static! (
     static ref HANDLES: ThreadHandles = Arc::new(Mutex::new(Vec::new()));
     static ref RDM: RefDataMap = DashMap::default();
+    static ref FILE_NAME_FILTER: HashSet<&'static str> = {
+        let mut ret = HashSet::<&'static str>::default();
+        ret.insert("NameCore_CN.xlsx");
+        ret.insert("LString.xlsx");
+        ret.insert("DeadCharacter.xlsx");
+        ret.insert("InscribedCharacter.xlsx");
+        ret
+    };
 );
 
 fn main() {
