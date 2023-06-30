@@ -569,6 +569,16 @@ impl CellValue {
         }
     }
 
+    pub fn is_arr_or_list(&self) -> bool {
+        if let Self::DArray(_) = self {
+            true
+        } else if let Self::DList(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn get_type(ty: &Rc<String>) -> Self {
         match ty.as_str() {
             "int" => Self::DInt(IntValue::default()),

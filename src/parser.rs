@@ -16,8 +16,8 @@ mod item_class;
 use base_class::BaseClass;
 mod base_class;
 
-use cell_value::CellValue;
-mod cell_value;
+pub use cell_value::CellValue;
+pub mod cell_value;
 
 use self::fk_value::{FKValue, RawValData};
 mod fk_value;
