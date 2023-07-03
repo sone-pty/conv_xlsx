@@ -21,7 +21,7 @@ pub type ItemStr = Option<Rc<String>>;
 
 pub const OUTPUT_SCRIPT_CODE_DIR: &'static str = "ExportScripts/";
 pub const OUTPUT_ENUM_CODE_DIR: &'static str = "ConfigExportEnum/";
-pub const SOURCE_XLSXS_DIR: &'static str = "xlsxs/";
+pub const SOURCE_XLSXS_DIR: &'static str = "D:/Config-beta/";
 pub const REF_TEXT_DIR: &'static str = "ConfigRefNameMapping/";
 
 // 默认多少行数据切换构造方法

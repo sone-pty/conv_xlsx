@@ -28,7 +28,7 @@ use std::io::Write;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::{fs, thread};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use crate::parser::CellValue;
@@ -39,23 +39,24 @@ type RefDataMap = DashMap<String, Arc<RefData>>;
 fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
-        if path.is_dir() {
+        let base_name = path.file_name().unwrap().to_str().unwrap();
+        
+        if FILE_NAME_FILTER.contains(base_name) {
+            continue;
+        }
+
+        if path.is_dir() && !path.file_name().is_some_and(|v| { v.to_str().is_some_and(|vv| vv.starts_with('.')) }) {
             //process_xlsx_dir(path)?;
             let handle = thread::spawn(|| {
                 let _ = process_xlsx_dir(path);
             });
             HANDLES.lock().unwrap().push(handle);
-        } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) && !path.starts_with("~") {
-            let base_name = path.file_name().unwrap().to_str().unwrap();
-            if FILE_NAME_FILTER.contains(base_name) {
-                continue;
-            }
+        } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) 
+            && !path.file_name().is_some_and(|v| { v.to_str().is_some_and(|vv| vv.starts_with('~')) }) 
+        {
             let idx = base_name.find('.').unwrap_or_default();
             
-            if base_name == "LString.xlsx" {
-                // async
-                process_lstring_xlsx(path.clone());
-            } else if base_name == "GlobalConfig.xlsx" {
+            if base_name == "GlobalConfig.xlsx" {
                 // sync
                 process_global_config(&path, &base_name[..idx]);
             } else {
@@ -167,7 +168,7 @@ fn process_lstring_xlsx<P: AsRef<Path> + std::marker::Send + 'static>(path: P) {
     let handle = thread::spawn(|| {
         if !pull_file() {
             println!("pull file failed");
-            return
+            return   
         }
         let file = ExcelFile::load_from_path(path);
         let mut tables = Vec::<ExcelTable>::default();
@@ -246,6 +247,8 @@ lazy_static! (
         ret.insert("NameCore_CN.xlsx");
         ret.insert("DeadCharacter.xlsx");
         ret.insert("InscribedCharacter.xlsx");
+        ret.insert("LString.xlsx");
+        ret.insert("Shell");
         ret
     };
 );
@@ -268,6 +271,10 @@ fn main() {
             }
 
             if args.name.is_empty() {
+                let mut ls_path = PathBuf::from(SOURCE_XLSXS_DIR);
+                ls_path.push("LString.xlsx");
+                process_lstring_xlsx(ls_path);
+
                 if let Err(e) = process_xlsx_dir(SOURCE_XLSXS_DIR) {
                     println!("{}", e);
                     exit(-1); 
@@ -275,7 +282,7 @@ fn main() {
 
                 for handle in HANDLES.lock().unwrap().drain(..) {
                     let _ = handle.join();
-                }            
+                }
             } else {
                 let base_name = args.name;
                 let mut file_name = String::from(&base_name);

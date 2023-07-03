@@ -951,17 +951,17 @@ fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap, ls_emp
                     //println!("{}: src val= {}", err, e);
                 }
             }
-        },
+        }
         CellValue::DByte(_) => {
             if let Err(_err) = e.parse::<u8>().map(|v| arr.push(CellValue::DByte( ByteValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DInt(_) => {
             if let Err(_err) = e.parse::<i32>().map(|v| arr.push(CellValue::DInt( IntValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DLString(_) => {
             let key: Rc<String> = Rc::from(String::from(e));
             if e.is_empty() {
@@ -979,40 +979,40 @@ fn collect_basic_value(e: &str, arr: &mut Vec<CellValue>, ls_map: &LSMap, ls_emp
                     arr.push(CellValue::DLString(LStringValue(key.clone(), -1)));
                 }
             }
-        },
+        }
         CellValue::DShort(_) => {
             if let Err(_err) = e.parse::<i16>().map(|v| arr.push(CellValue::DShort( ShortValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DSByte(_) => {
             if let Err(_err) = e.parse::<i8>().map(|v| arr.push(CellValue::DSByte( SByteValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DFloat(_) => {
             if let Err(_err) = e.parse::<f32>().map(|v| arr.push(CellValue::DFloat( FloatValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DDouble(_) => {
             if let Err(_err) = e.parse::<f64>().map(|v| arr.push(CellValue::DDouble( DoubleValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DString(_) => {
             arr.push(CellValue::DString( StringValue(Rc::new(e.to_string())) ));
-        },
+        }
         CellValue::DUInt(_) => {
             if let Err(_err) = e.parse::<u32>().map(|v| arr.push(CellValue::DUInt( UIntValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         CellValue::DUShort(_) => {
             if let Err(_err) = e.parse::<u16>().map(|v| arr.push(CellValue::DUShort( UShortValue(v) ))) {
                 //println!("{}: src val= {}", err, e);
             }
-        },
+        }
         _ => { todo!("err") }
     }
 }
@@ -1135,11 +1135,12 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap, ls_empty_map: 
     let filter_val: String = val.chars().filter(|&c| !c.is_whitespace()).collect();
     let mut start_idx = 1;
     let mut temp: Vec<CellValue> = vec![];
+    let ls_data = ls_map.as_ref().borrow();
 
     match dest {
         CellValue::DArray(arr) => {
             collect_vec_value(&mut arr.0, ls_map, &filter_val, ls_empty_map, pos);
-        },
+        }
         CellValue::DList(list) => {
             match (list.0)[0] {
                 CellValue::DArray(ref arr) => {
@@ -1156,7 +1157,7 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap, ls_empty_map: 
                     for v in temp {
                         list.0.push(v);
                     }
-                },
+                }
                 CellValue::DList(ref lst) => {
                     while start_idx < filter_val.len() {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
@@ -1171,7 +1172,7 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap, ls_empty_map: 
                     for v in temp {
                         list.0.push(v);
                     }
-                },
+                }
                 CellValue::DShortList(_) => {
                     while start_idx < filter_val.len() {
                         let end_idx = find_block(&filter_val[start_idx..]) + start_idx;
@@ -1186,15 +1187,42 @@ fn collect_value(val: &str, dest: &mut CellValue, ls_map: &LSMap, ls_empty_map: 
                     for v in temp {
                         list.0.push(v);
                     }
-                },
+                }
                 _ => {
                     collect_vec_value(&mut list.0, ls_map, &filter_val, ls_empty_map, pos);
                 }
             }
-        },
+        }
         CellValue::DShortList(ShortListValue(arr)) => {
             collect_vec_value(&mut arr.0, ls_map, &filter_val, ls_empty_map, pos);
-        },
+        }
+        CellValue::DValueTuple(ValueTupleValue(arr)) => {
+            let vals = split_val(&filter_val[1..filter_val.len()-1]);
+            for (idx, v) in arr.iter_mut().enumerate() {
+                match v {
+                    CellValue::DBool(BoolValue(ref mut v)) => { *v = vals[idx].parse::<bool>().unwrap(); }
+                    CellValue::DByte(ByteValue(ref mut v)) => { *v = vals[idx].parse::<u8>().unwrap(); }
+                    CellValue::DSByte(SByteValue(ref mut v)) => { *v = vals[idx].parse::<i8>().unwrap(); }
+                    CellValue::DFloat(FloatValue(ref mut v)) => { *v = vals[idx].parse::<f32>().unwrap(); }
+                    CellValue::DDouble(DoubleValue(ref mut v)) => { *v = vals[idx].parse::<f64>().unwrap(); }
+                    CellValue::DInt(IntValue(ref mut v)) => { *v = vals[idx].parse::<i32>().unwrap(); }
+                    CellValue::DUInt(UIntValue(ref mut v)) => { *v = vals[idx].parse::<u32>().unwrap(); }
+                    CellValue::DShort(ShortValue(ref mut v)) => { *v = vals[idx].parse::<i16>().unwrap(); }
+                    CellValue::DUShort(UShortValue(ref mut v)) => { *v = vals[idx].parse::<u16>().unwrap(); }
+                    CellValue::DString(StringValue(ref mut v)) => { *v = Rc::from(String::from(&vals[idx]));  }
+                    CellValue::DLString(LStringValue(ref mut k, ref mut v)) => {
+                        let key = Rc::from(String::from(&vals[idx]));
+                        if ls_data.contains_key(&key) {
+                            *k = key.clone();
+                            *v = ls_data[&key];
+                        } else {
+                            println!("LString translate err");
+                        }
+                    }
+                    _ => { todo!("err") }
+                }
+            }
+        }
         _ => { todo!("err") }
     }
 }
@@ -1534,7 +1562,8 @@ impl ValueInfo for ArrayValue {
                     CellValue::DString,
                     CellValue::DLString,
                     CellValue::DCustom,
-                    CellValue::DTuple
+                    CellValue::DTuple,
+                    CellValue::DValueTuple
                 );
 
                 if cnt < self.0.len()-1 {
