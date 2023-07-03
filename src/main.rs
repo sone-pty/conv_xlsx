@@ -11,11 +11,13 @@ use defs::{
 
 mod parser;
 mod reference;
+mod pull;
 
 mod args;
 use args::Args;
 use clap::Parser;
 use lazy_static::lazy_static;
+use pull::pull_file;
 use reference::RefData;
 use xlsx_read::excel_file::ExcelFile;
 use xlsx_read::excel_table::ExcelTable;
@@ -163,6 +165,10 @@ fn process_global_config<P: AsRef<Path>>(path: P, name: &str) {
 #[allow(unused_must_use)]
 fn process_lstring_xlsx<P: AsRef<Path> + std::marker::Send + 'static>(path: P) {
     let handle = thread::spawn(|| {
+        if !pull_file() {
+            println!("pull file failed");
+            return
+        }
         let file = ExcelFile::load_from_path(path);
         let mut tables = Vec::<ExcelTable>::default();
 
@@ -269,7 +275,7 @@ fn main() {
 
                 for handle in HANDLES.lock().unwrap().drain(..) {
                     let _ = handle.join();
-                }
+                }            
             } else {
                 let base_name = args.name;
                 let mut file_name = String::from(&base_name);

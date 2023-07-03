@@ -10,6 +10,8 @@ xlsx-read = { path = "../xlsx-read" }
 clap = { version = "4.1.8", features = ["derive"] }
 lazy_static = "1.4.0"
 dashmap = "4.0.2"
+reqwest = { version = "0.11", features = ["blocking"] }
+serde_json = "1.0"
 
 [profile.release]
 opt-level = 3
