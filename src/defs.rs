@@ -39,3 +39,6 @@ pub const ENUM_COL_DESC: usize = 2;
 
 // 行结束符
 pub const LINE_END_FLAG: &'static str = "\r\n";
+
+// 请求最大延时(s)
+pub const MAX_REQ_DELAY: u64 = 5;

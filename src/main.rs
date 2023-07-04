@@ -26,17 +26,18 @@ use std::collections::{HashSet, BTreeMap};
 use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::Sender;
+use std::sync::{Arc, mpsc};
+use std::thread::JoinHandle;
 use std::{fs, thread};
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use crate::parser::CellValue;
 
-type ThreadHandles = Arc<Mutex<Vec<thread::JoinHandle<()>>>>;
 type RefDataMap = DashMap<String, Arc<RefData>>;
 
-fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
+fn process_xlsx_dir<P: AsRef<Path>>(dir: P, tx: Sender<JoinHandle<()>>) -> Result<(), std::io::Error> {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
         let base_name = path.file_name().unwrap().to_str().unwrap();
@@ -46,11 +47,12 @@ fn process_xlsx_dir<P: AsRef<Path>>(dir: P) -> Result<(), std::io::Error> {
         }
 
         if path.is_dir() && !path.file_name().is_some_and(|v| { v.to_str().is_some_and(|vv| vv.starts_with('.')) }) {
-            //process_xlsx_dir(path)?;
-            let handle = thread::spawn(|| {
-                let _ = process_xlsx_dir(path);
+            //process_xlsx_dir(path, tx.clone())?;
+            let tx_clone = tx.clone();
+            let handle = thread::spawn(move || {
+                let _ = process_xlsx_dir(path, tx_clone);
             });
-            HANDLES.lock().unwrap().push(handle);
+            tx.send(handle).unwrap();
         } else if path.extension().is_some_and(|x| x.to_str().unwrap() == DEFAULT_SOURCE_SUFFIX) 
             && !path.file_name().is_some_and(|v| { v.to_str().is_some_and(|vv| vv.starts_with('~')) }) 
         {
@@ -164,7 +166,7 @@ fn process_global_config<P: AsRef<Path>>(path: P, name: &str) {
 }
 
 #[allow(unused_must_use)]
-fn process_lstring_xlsx<P: AsRef<Path> + std::marker::Send + 'static>(path: P) {
+fn process_lstring_xlsx<P: AsRef<Path> + std::marker::Send + 'static>(path: P, sx: Sender<JoinHandle<()>>) {
     let handle = thread::spawn(|| {
         if !pull_file() {
             println!("pull file failed");
@@ -235,12 +237,10 @@ fn process_lstring_xlsx<P: AsRef<Path> + std::marker::Send + 'static>(path: P) {
             }
         }
     });
-
-    HANDLES.lock().unwrap().push(handle);
+    sx.send(handle).unwrap();
 }
 
 lazy_static! (
-    static ref HANDLES: ThreadHandles = Arc::new(Mutex::new(Vec::new()));
     static ref RDM: RefDataMap = DashMap::default();
     static ref FILE_NAME_FILTER: HashSet<&'static str> = {
         let mut ret = HashSet::<&'static str>::default();
@@ -271,16 +271,20 @@ fn main() {
             }
 
             if args.name.is_empty() {
+                let (tx, rx) = mpsc::channel::<JoinHandle<()>>();
+
                 let mut ls_path = PathBuf::from(SOURCE_XLSXS_DIR);
                 ls_path.push("LString.xlsx");
-                process_lstring_xlsx(ls_path);
+                process_lstring_xlsx(ls_path, tx.clone());
 
-                if let Err(e) = process_xlsx_dir(SOURCE_XLSXS_DIR) {
+                if let Err(e) = process_xlsx_dir(SOURCE_XLSXS_DIR, tx.clone()) {
                     println!("{}", e);
-                    exit(-1); 
+                    exit(-1);
                 }
 
-                for handle in HANDLES.lock().unwrap().drain(..) {
+                // !! drop the raw tx
+                drop(tx);
+                while let Ok(handle) = rx.recv() {
                     let _ = handle.join();
                 }
             } else {

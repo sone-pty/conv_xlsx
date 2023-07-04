@@ -2,7 +2,7 @@ use std::{time::Duration, fs::File};
 use reqwest::blocking::Client;
 use serde_json::Value;
 
-use crate::defs::{SOURCE_XLSXS_DIR, DEFAULT_SOURCE_SUFFIX};
+use crate::defs::{SOURCE_XLSXS_DIR, DEFAULT_SOURCE_SUFFIX, MAX_REQ_DELAY};
 
 #[allow(dead_code)]
 const ACCOUNT: &'static str = "public";
@@ -12,7 +12,7 @@ const PASSWD: &'static str = "5NT38Hb)m3";
 pub fn pull_file() -> bool {
     let url = format!("https://server.conchship.com.cn:4433/drive/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account={}&passwd={}&session=FileStation&format=sid", ACCOUNT, PASSWD);
     let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(MAX_REQ_DELAY))
         .build()
         .unwrap();
 

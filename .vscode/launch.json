@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["RandomEnemy", "b"],
+            "args": ["b"],
             "cwd": "${workspaceFolder}"
         }
     ]
