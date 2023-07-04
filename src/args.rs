@@ -13,16 +13,16 @@ pub struct Args {
     #[arg(default_value_t = false, short, long)]
     pub pull_file: bool,
     /// path of the config dir
-    #[arg(default_value_t = String::from("D:/Config-beta/"), short, long)]
+    #[arg(default_value_t = String::from("D:/Config-beta/"), long)]
     pub src_table_dir: String,
     /// path of the output script dir
-    #[arg(default_value_t = String::from("ExportScripts/"), short, long)]
+    #[arg(default_value_t = String::from("ExportScripts/"), long)]
     pub output_script_dir: String,
     /// path of the output enum dir
-    #[arg(default_value_t = String::from("ConfigExportEnum/"), short, long)]
+    #[arg(default_value_t = String::from("ConfigExportEnum/"), long)]
     pub output_enum_dir: String,
     /// path of the config ref mapping dir
-    #[arg(default_value_t = String::from("ConfigRefNameMapping/"), short, long)]
+    #[arg(default_value_t = String::from("ConfigRefNameMapping/"), long)]
     pub ref_mapping_dir: String,
     #[command(subcommand)]
     pub command: Command,
