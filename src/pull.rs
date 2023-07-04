@@ -8,13 +8,11 @@ use crate::defs::{SOURCE_XLSXS_DIR, DEFAULT_SOURCE_SUFFIX, MAX_REQ_DELAY};
 const ACCOUNT: &'static str = "public";
 #[allow(dead_code)]
 const PASSWD: &'static str = "5NT38Hb)m3";
-#[allow(dead_code)]
-const BAT_PATH: &'static str = r#"D:\Config-beta\update.bat"#;
 
 pub fn update_svn() {
     let output = Command::new("cmd")
         .arg("/C")
-        .arg(BAT_PATH)
+        .arg(format!(r#"{}\update.bat"#, unsafe { SOURCE_XLSXS_DIR }))
         .output()
         .expect("Failed to execute command");
 
