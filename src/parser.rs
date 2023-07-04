@@ -221,7 +221,7 @@ impl Parser {
         let height = table.height();
         let en_map = ENMap::default();
         
-        let dest = format!("{}/E{}{}.cs", OUTPUT_ENUM_CODE_DIR, base_name, enum_name);
+        let dest = format!("{}/E{}{}.cs", unsafe { OUTPUT_ENUM_CODE_DIR }, base_name, enum_name);
         if let Ok(mut file) = File::create(dest) {
             file.write("#pragma warning disable 1591".as_bytes())?;
             file.write(LINE_END_FLAG.as_bytes())?;

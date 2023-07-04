@@ -1,4 +1,4 @@
-use std::{time::Duration, fs::File};
+use std::{time::Duration, fs::File, process::Command};
 use reqwest::blocking::Client;
 use serde_json::Value;
 
@@ -8,6 +8,18 @@ use crate::defs::{SOURCE_XLSXS_DIR, DEFAULT_SOURCE_SUFFIX, MAX_REQ_DELAY};
 const ACCOUNT: &'static str = "public";
 #[allow(dead_code)]
 const PASSWD: &'static str = "5NT38Hb)m3";
+#[allow(dead_code)]
+const BAT_PATH: &'static str = r#"D:\Config-beta\update.bat"#;
+
+pub fn update_svn() {
+    let output = Command::new("cmd")
+        .arg("/C")
+        .arg(BAT_PATH)
+        .output()
+        .expect("Failed to execute command");
+
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+}
 
 pub fn pull_file() -> bool {
     let url = format!("https://server.conchship.com.cn:4433/drive/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account={}&passwd={}&session=FileStation&format=sid", ACCOUNT, PASSWD);
@@ -43,7 +55,7 @@ pub fn pull_file() -> bool {
 }
 
 fn download(name: &str, pattern: &str, sid: &str, client: &Client) {
-    let output_path = format!("{}/{}.{}", SOURCE_XLSXS_DIR, name, DEFAULT_SOURCE_SUFFIX);
+    let output_path = format!("{}/{}.{}", unsafe { SOURCE_XLSXS_DIR }, name, DEFAULT_SOURCE_SUFFIX);
     if let Ok(mut file) = File::create(output_path) {
         let url = format!("https://server.conchship.com.cn:4433/drive/webapi/entry.cgi/{}.xlsx?api=SYNO.Office.Export&method=download&version=1&session=FileStation&path=%22id%3A{}%22&_sid={}", name, pattern, sid);
         match client.get(url).send() {

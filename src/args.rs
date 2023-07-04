@@ -4,8 +4,26 @@ use clap::{Parser, Subcommand};
 #[command(version, about)]
 pub struct Args {
     /// Name of the xlsx file
-    #[arg(default_value_t = String::from(""))]
+    #[arg(default_value_t = String::from(""), short, long)]
     pub name: String,
+    /// need to update svn or not
+    #[arg(default_value_t = false, short, long)]
+    pub update_svn: bool,
+    /// need to pull file or not
+    #[arg(default_value_t = false, short, long)]
+    pub pull_file: bool,
+    /// path of the config dir
+    #[arg(default_value_t = String::from("D:/Config-beta/"), short, long)]
+    pub src_table_dir: String,
+    /// path of the output script dir
+    #[arg(default_value_t = String::from("ExportScripts/"), short, long)]
+    pub output_script_dir: String,
+    /// path of the output enum dir
+    #[arg(default_value_t = String::from("ConfigExportEnum/"), short, long)]
+    pub output_enum_dir: String,
+    /// path of the config ref mapping dir
+    #[arg(default_value_t = String::from("ConfigRefNameMapping/"), short, long)]
+    pub ref_mapping_dir: String,
     #[command(subcommand)]
     pub command: Command,
 }

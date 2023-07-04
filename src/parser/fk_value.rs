@@ -116,7 +116,7 @@ impl<'a> FKValue<'a> {
         let mut file_name = String::from(&name);
         file_name.push('.');
         file_name.push_str(DEFAULT_SOURCE_SUFFIX);
-        let xlsxs_path = super::find_file(SOURCE_XLSXS_DIR, &file_name);
+        let xlsxs_path = super::find_file(unsafe { SOURCE_XLSXS_DIR }, &file_name);
 
         if let Ok(table) = super::Parser::get_table_with_id(xlsxs_path, "") {
             let mut fk_map = self.fk_map.borrow_mut();

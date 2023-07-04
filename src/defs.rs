@@ -19,10 +19,10 @@ pub const DATA_TEMPLATE_ID_POS: (usize, usize) = (1, 3);
 
 pub type ItemStr = Option<Rc<String>>;
 
-pub const OUTPUT_SCRIPT_CODE_DIR: &'static str = "ExportScripts/";
-pub const OUTPUT_ENUM_CODE_DIR: &'static str = "ConfigExportEnum/";
-pub const SOURCE_XLSXS_DIR: &'static str = "D:/Config-beta/";
-pub const REF_TEXT_DIR: &'static str = "ConfigRefNameMapping/";
+pub static mut OUTPUT_SCRIPT_CODE_DIR: &'static str = "ExportScripts/";
+pub static mut OUTPUT_ENUM_CODE_DIR: &'static str = "ConfigExportEnum/";
+pub static mut SOURCE_XLSXS_DIR: &'static str = "D:/Config-beta/";
+pub static mut REF_TEXT_DIR: &'static str = "ConfigRefNameMapping/";
 
 // 默认多少行数据切换构造方法
 pub const DEFAULT_LINES: usize = 101;
