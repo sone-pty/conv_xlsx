@@ -1,4 +1,6 @@
 use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap, vec};
+use vnlex::{cursor, lexer::{Lexer, self}, token::tokenizers::{self, KIND_WHITESPACE_OR_COMMENT, KIND_KEYWORD}};
+
 use super::{stack::Stack, LSMap, ENMap, fk_value::split_val, LSEmptyMap};
 
 macro_rules! get_basic_type_string {
@@ -1736,5 +1738,51 @@ impl ValueInfo for ValueTupleValue {
         }
         stream.write(">".as_bytes())?;
         Ok(())
+    }
+}
+
+pub const DEF_KEYWORDS: &[(&str, u32)] = &[
+    ("_", 1),
+    ("byte", 2),
+    ("List", 3),
+];
+
+pub const DEF_SYMBOLS: &[(char, u32)] = &[
+    ('!', 1),
+    ('#', 2),
+    (',', 3),
+    (':', 4),
+    (';', 5),
+    ('<', 6),
+    ('=', 7),
+    ('>', 8),
+    ('@', 9),
+    ('^', 10),
+    ('|', 11),
+    ('[', 12),
+    (']', 13),
+];
+
+#[test]
+fn te() {
+    let mut symbols = Box::new(Vec::<(char, u32)>::default());
+    symbols.extend_from_slice(DEF_SYMBOLS);
+    symbols.sort_by_key(|v| v.0);
+    let mut keywords = Box::new(Vec::<(&str, u32)>::default());
+    keywords.extend_from_slice(DEF_KEYWORDS);
+    keywords.sort_by_key(|v| v.0);
+
+    let code = "List<List<byte[3]>>";
+    let mut cursor = cursor::Cursor::new(code, 0, 0, None);
+    let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
+                .append(tokenizers::Number)
+                .append(tokenizers::identifier_keyword_with_sorted_array(Box::leak(keywords)))
+                .append(tokenizers::symbol_with_sorted_array(Box::leak(symbols)))
+                .build();
+
+    while let Some(token) = lexer.tokenizing(&mut cursor, &mut ()).next() {
+        if let Ok(token) = token {
+            println!("kind: {}, content: {}", token.kind, token.content)
+        }
     }
 }
