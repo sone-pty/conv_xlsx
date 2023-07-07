@@ -20,6 +20,9 @@ pub trait StateMachineImpl {
 
     // token-end
     const END_TOKEN: Self::Input;
+
+    // custom-token
+    const CUSTOM_TOKEN: Self::Input;
     
     // transfer one state to another
     fn transfer(&mut self, state: &Self::State, input: &Self::Input) -> Option<Self::State>;
@@ -72,14 +75,23 @@ impl<T> StateMachine<T> where T: StateMachineImpl + Default {
         while let Some(token) = tokens.next() {
             if token.is_err() { return Err(TransferFailedError); }
             let key = token.unwrap().content;
-            if !T::ALPHA_TABLE.contains_key(key) { continue; }
-            let input = &T::ALPHA_TABLE[key];
-            
-            if let Some(v) = self.impl_obj.transfer(&self.state, input) {
-                self.impl_obj.output(&self.state, &v, input);
-                self.state = v;
+            // skip x of [x]
+            if let Ok(_) = key.parse::<i32>() { continue; }
+            // custom type
+            if !T::ALPHA_TABLE.contains_key(key) {
+                if let Some(v) = self.impl_obj.transfer(&self.state, &T::CUSTOM_TOKEN) {
+                    self.impl_obj.output(&self.state, &v, &T::CUSTOM_TOKEN);
+                    self.state = v;
+                } else {
+                    return Err(TransferFailedError);
+                }
             } else {
-                return Err(TransferFailedError);
+                if let Some(v) = self.impl_obj.transfer(&self.state, &T::ALPHA_TABLE[key]) {
+                    self.impl_obj.output(&self.state, &v, &T::ALPHA_TABLE[key]);
+                    self.state = v;
+                } else {
+                    return Err(TransferFailedError);
+                }
             }
         }
 
@@ -155,6 +167,7 @@ impl StateMachineImpl for TypeMachine {
 
     const INITIAL_STATE: Self::State = Self::State::Stop;
     const END_TOKEN: Self::Input = Self::Input::Empty;
+    const CUSTOM_TOKEN: Self::Input = Self::Input::Custom;
 
     const ALPHA_TABLE: LazyLock<HashMap<&'static str, Self::Input>> = {
         LazyLock::new(|| {
@@ -203,12 +216,13 @@ impl StateMachineImpl for TypeMachine {
                 Some(Self::State::BasicInList)
             }
 
-            (Self::State::BasicInList, Self::Input::RBracket) => {
+            (Self::State::BasicInList | Self::State::ArrayEnd | Self::State::ListEnd, Self::Input::RBracket) => {
                 Some(Self::State::ListEnd)
             }
             // -------------List-----------------
 
             // -------------Array-----------------
+            (Self::State::BasicInList, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
             (Self::State::Basic, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
             (Self::State::ArrayBegin, Self::Input::RMidBracket) => { Some(Self::State::ArrayEnd) }
             // -------------Array-----------------
@@ -250,7 +264,7 @@ impl StateMachineImpl for TypeMachine {
             (Self::State::ListBegin, Self::State::InList) => {
                 self.vals.push(CellValue::DList(ListValue::default()))
             }
-            (Self::State::BasicInList, Self::State::ListEnd) => {
+            (Self::State::BasicInList | Self::State::ArrayEnd | Self::State::ListEnd, Self::State::ListEnd) => {
                 if let Ok(element) = self.vals.pop() {
                     self.vals.peek_mut().map(|list| {
                         if let CellValue::DList(ListValue(vec)) = list {

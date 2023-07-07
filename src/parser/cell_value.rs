@@ -1744,6 +1744,18 @@ impl ValueInfo for ValueTupleValue {
 pub const DEF_KEYWORDS: &[(&str, u32)] = &[
     ("byte", 1),
     ("List", 2),
+    ("Tuple", 3),
+    ("ValueTuple", 4),
+    ("float", 5),
+    ("double", 6),
+    ("int", 7),
+    ("uint", 8),
+    ("LString", 9),
+    ("Lstring", 10),
+    ("String", 11),
+    ("short", 12),
+    ("ushort", 13),
+    ("ShortList", 14),
 ];
 
 pub const DEF_SYMBOLS: &[(char, u32)] = &[
@@ -1771,7 +1783,7 @@ fn te() {
     keywords.extend_from_slice(DEF_KEYWORDS);
     keywords.sort_by_key(|v| v.0);
 
-    let code = "List<byte[3]>";
+    let code = "List<List<Book[]>>";
     let mut cursor = cursor::Cursor::new(code, 0, 0, None);
     let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
                 .append(tokenizers::Number)
@@ -1783,9 +1795,11 @@ fn te() {
     if let Ok(v) = sm.tick(lexer.tokenizing(&mut cursor, &mut ())) {
         match v.unwrap() {
             CellValue::DList(vec) => {
-                if let CellValue::DArray(arr) = &vec.0[0] {
-                    if let CellValue::DByte(_) = &arr.0[0] {
-                        println!("parse successfully")
+                if let CellValue::DList(vec) = &vec.0[0] {
+                    if let CellValue::DArray(arr) = &vec.0[0] {
+                        if let CellValue::DCustom(_) = &arr.0[0] {
+                            println!("success")
+                        }
                     }
                 }
             }
