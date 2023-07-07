@@ -1771,7 +1771,7 @@ fn te() {
     keywords.extend_from_slice(DEF_KEYWORDS);
     keywords.sort_by_key(|v| v.0);
 
-    let code = "byte[3]";
+    let code = "List<byte[3]>";
     let mut cursor = cursor::Cursor::new(code, 0, 0, None);
     let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
                 .append(tokenizers::Number)
@@ -1782,9 +1782,11 @@ fn te() {
     let mut sm: StateMachine::<TypeMachine> = StateMachine::new();
     if let Ok(v) = sm.tick(lexer.tokenizing(&mut cursor, &mut ())) {
         match v.unwrap() {
-            CellValue::DArray(vec) => {
-                if let CellValue::DByte(_) = &vec.0[0] {
-                    println!("parse successfully")
+            CellValue::DList(vec) => {
+                if let CellValue::DArray(arr) = &vec.0[0] {
+                    if let CellValue::DByte(_) = &arr.0[0] {
+                        println!("parse successfully")
+                    }
                 }
             }
             _ => {}

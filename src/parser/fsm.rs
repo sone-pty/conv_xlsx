@@ -2,7 +2,7 @@ use std::{fmt, error::Error, collections::HashMap, sync::LazyLock};
 
 use vnlex::{token::Token, ParseError};
 
-use super::{CellValue, cell_value::{ByteValue, DoubleValue, FloatValue, IntValue, LStringValue, SByteValue, ShortValue, StringValue, UShortValue, CustomValue, UIntValue, ArrayValue}, stack::Stack};
+use super::{CellValue, cell_value::{ByteValue, DoubleValue, FloatValue, IntValue, LStringValue, SByteValue, ShortValue, StringValue, UShortValue, CustomValue, UIntValue, ArrayValue, ListValue}, stack::Stack};
 
 pub trait StateMachineImpl {
     // input type
@@ -94,12 +94,13 @@ impl<T> StateMachine<T> where T: StateMachineImpl + Default {
 
 /* CellType */
 pub struct TypeMachine {
-    stack: Stack<CellValue>
+    vals: Stack<CellValue>
 }
 #[derive(PartialEq)]
 pub enum TypeMachineState {
     Stop,
-    Begin,
+    Basic,
+    BasicInList,
     ListBegin,
     InList,
     ListEnd,
@@ -143,7 +144,7 @@ pub enum TypeMachineInput {
 
 impl Default for TypeMachine {
     fn default() -> Self {
-        Self { stack: Stack::new() }
+        Self { vals: Stack::new() }
     }
 }
 
@@ -186,24 +187,34 @@ impl StateMachineImpl for TypeMachine {
 
     fn transfer(&mut self, state: &Self::State, input: &Self::Input) -> Option<Self::State> {
         match (state, input) {
-            // Basic-Type
+            // Basic
             (Self::State::Stop, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
              Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
-             Self::Input::UInt | Self::Input::Custom) => { Some(Self::State::Begin) }
+             Self::Input::UInt | Self::Input::Custom) => { Some(Self::State::Basic) }
             
             // -------------List-----------------
             (Self::State::Stop | Self::State::InList | Self::State::InTuple, Self::Input::List) => { Some(Self::State::ListBegin) }
+
             (Self::State::ListBegin, Self::Input::LBracket) => { Some(Self::State::InList) }
-            (Self::State::InList, Self::Input::RBracket) => { Some(Self::State::ListEnd) }
+
+            (Self::State::InList, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
+             Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
+             Self::Input::UInt | Self::Input::Custom) => {
+                Some(Self::State::BasicInList)
+            }
+
+            (Self::State::BasicInList, Self::Input::RBracket) => {
+                Some(Self::State::ListEnd)
+            }
             // -------------List-----------------
 
             // -------------Array-----------------
-            (Self::State::Begin, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
+            (Self::State::Basic, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
             (Self::State::ArrayBegin, Self::Input::RMidBracket) => { Some(Self::State::ArrayEnd) }
             // -------------Array-----------------
 
             // End
-            (Self::State::Begin | Self::State::ListEnd | Self::State::ArrayEnd | Self::State::TupleEnd | Self::State::ValueTupleEnd, Self::Input::Empty) => { Some(Self::State::End) }
+            (Self::State::Basic | Self::State::ListEnd | Self::State::ArrayEnd | Self::State::TupleEnd | Self::State::ValueTupleEnd, Self::Input::Empty) => { Some(Self::State::End) }
             (_, Self::Input::WhiteSpace) => { Some(Self::State::Skip) }
             _ => { None }
         }
@@ -211,38 +222,49 @@ impl StateMachineImpl for TypeMachine {
 
     fn output(&mut self, bef: &Self::State, aft: &Self::State, input: &Self::Input) {
         match (bef, aft) {
-            (Self::State::Stop, Self::State::Begin) => {
+            (Self::State::Stop | Self::State::InList, Self::State::BasicInList) => {
                 match input {
-                    Self::Input::Byte => { self.stack.push(CellValue::DByte(ByteValue::default())) }
-                    Self::Input::Double => { self.stack.push(CellValue::DDouble(DoubleValue::default())) }
-                    Self::Input::Float => { self.stack.push(CellValue::DFloat(FloatValue::default())) }
-                    Self::Input::Int => { self.stack.push(CellValue::DInt(IntValue::default())) }
-                    Self::Input::LString => { self.stack.push(CellValue::DLString(LStringValue::default())) }
-                    Self::Input::SByte => { self.stack.push(CellValue::DSByte(SByteValue::default())) }
-                    Self::Input::Short => { self.stack.push(CellValue::DShort(ShortValue::default())) }
-                    Self::Input::String => { self.stack.push(CellValue::DString(StringValue::default())) }
-                    Self::Input::UShort => { self.stack.push(CellValue::DUShort(UShortValue::default())) }
-                    Self::Input::UInt => { self.stack.push(CellValue::DUInt(UIntValue::default())) }
-                    Self::Input::Custom => { self.stack.push(CellValue::DCustom(CustomValue::default())) }
+                    Self::Input::Byte => { self.vals.push(CellValue::DByte(ByteValue::default())) }
+                    Self::Input::Double => { self.vals.push(CellValue::DDouble(DoubleValue::default())) }
+                    Self::Input::Float => { self.vals.push(CellValue::DFloat(FloatValue::default())) }
+                    Self::Input::Int => { self.vals.push(CellValue::DInt(IntValue::default())) }
+                    Self::Input::LString => { self.vals.push(CellValue::DLString(LStringValue::default())) }
+                    Self::Input::SByte => { self.vals.push(CellValue::DSByte(SByteValue::default())) }
+                    Self::Input::Short => { self.vals.push(CellValue::DShort(ShortValue::default())) }
+                    Self::Input::String => { self.vals.push(CellValue::DString(StringValue::default())) }
+                    Self::Input::UShort => { self.vals.push(CellValue::DUShort(UShortValue::default())) }
+                    Self::Input::UInt => { self.vals.push(CellValue::DUInt(UIntValue::default())) }
+                    Self::Input::Custom => { self.vals.push(CellValue::DCustom(CustomValue::default())) }
                     _ => {}
                 }
             }
             (Self::State::ArrayBegin, Self::State::ArrayEnd) => {
-                if let Ok(basic) = self.stack.pop() {
+                if let Ok(basic) = self.vals.pop() {
                     let mut vec = ArrayValue::default();
                     vec.0.push(basic);
-                    self.stack.push(CellValue::DArray(vec));
+                    self.vals.push(CellValue::DArray(vec));
                 } else {
                     unreachable!()
                 }
             }
-
+            (Self::State::ListBegin, Self::State::InList) => {
+                self.vals.push(CellValue::DList(ListValue::default()))
+            }
+            (Self::State::BasicInList, Self::State::ListEnd) => {
+                if let Ok(element) = self.vals.pop() {
+                    self.vals.peek_mut().map(|list| {
+                        if let CellValue::DList(ListValue(vec)) = list {
+                            vec.push(element);
+                        }
+                    });
+                }
+            }
             _ => {}
         }
     }
 
     fn produce(&mut self) -> Option<Self::Output> {
-        if let Ok(v) = self.stack.pop() {
+        if let Ok(v) = self.vals.pop() {
             Some(v)
         } else {
             None
