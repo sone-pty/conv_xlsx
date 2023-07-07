@@ -1,7 +1,7 @@
 use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap, vec};
 use vnlex::{cursor, lexer::{Lexer, self}, token::tokenizers::{self, KIND_WHITESPACE_OR_COMMENT, KIND_KEYWORD}};
 
-use super::{stack::Stack, LSMap, ENMap, fk_value::split_val, LSEmptyMap};
+use super::{stack::Stack, LSMap, ENMap, fk_value::split_val, LSEmptyMap, fsm::{StateMachine, TypeMachine}};
 
 macro_rules! get_basic_type_string {
     ($self:ident, $stream:ident, $($enum:ident::$variant:ident),+) => {
@@ -852,7 +852,7 @@ impl CellValue {
         }
     }
 
-    fn clone_from_other_with_default(v: &CellValue) -> CellValue {
+    pub fn clone_from_other_with_default(v: &CellValue) -> CellValue {
         match v {
             CellValue::DBool(_) => {
                 CellValue::DBool(BoolValue(true))
@@ -1742,9 +1742,8 @@ impl ValueInfo for ValueTupleValue {
 }
 
 pub const DEF_KEYWORDS: &[(&str, u32)] = &[
-    ("_", 1),
-    ("byte", 2),
-    ("List", 3),
+    ("byte", 1),
+    ("List", 2),
 ];
 
 pub const DEF_SYMBOLS: &[(char, u32)] = &[
@@ -1772,7 +1771,7 @@ fn te() {
     keywords.extend_from_slice(DEF_KEYWORDS);
     keywords.sort_by_key(|v| v.0);
 
-    let code = "List<List<byte[3]>>";
+    let code = "byte[3]";
     let mut cursor = cursor::Cursor::new(code, 0, 0, None);
     let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
                 .append(tokenizers::Number)
@@ -1780,9 +1779,15 @@ fn te() {
                 .append(tokenizers::symbol_with_sorted_array(Box::leak(symbols)))
                 .build();
 
-    while let Some(token) = lexer.tokenizing(&mut cursor, &mut ()).next() {
-        if let Ok(token) = token {
-            println!("kind: {}, content: {}", token.kind, token.content)
+    let mut sm: StateMachine::<TypeMachine> = StateMachine::new();
+    if let Ok(v) = sm.tick(lexer.tokenizing(&mut cursor, &mut ())) {
+        match v.unwrap() {
+            CellValue::DArray(vec) => {
+                if let CellValue::DByte(_) = &vec.0[0] {
+                    println!("parse successfully")
+                }
+            }
+            _ => {}
         }
     }
 }

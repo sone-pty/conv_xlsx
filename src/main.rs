@@ -1,4 +1,5 @@
 #![feature(string_remove_matches)]
+#![feature(lazy_cell)]
 
 mod defs;
 use dashmap::DashMap;
