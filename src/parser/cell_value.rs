@@ -1775,7 +1775,7 @@ pub const DEF_SYMBOLS: &[(char, u32)] = &[
 ];
 
 #[test]
-fn te() {
+fn te_0() {
     let mut symbols = Box::new(Vec::<(char, u32)>::default());
     symbols.extend_from_slice(DEF_SYMBOLS);
     symbols.sort_by_key(|v| v.0);
@@ -1800,6 +1800,70 @@ fn te() {
                         if let CellValue::DCustom(_) = &arr.0[0] {
                             println!("success")
                         }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+#[test]
+fn te_1() {
+    let mut symbols = Box::new(Vec::<(char, u32)>::default());
+    symbols.extend_from_slice(DEF_SYMBOLS);
+    symbols.sort_by_key(|v| v.0);
+    let mut keywords = Box::new(Vec::<(&str, u32)>::default());
+    keywords.extend_from_slice(DEF_KEYWORDS);
+    keywords.sort_by_key(|v| v.0);
+
+    let code = "Tuple<CUSS[3], int>";
+    let mut cursor = cursor::Cursor::new(code, 0, 0, None);
+    let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
+                .append(tokenizers::Number)
+                .append(tokenizers::identifier_keyword_with_sorted_array(Box::leak(keywords)))
+                .append(tokenizers::symbol_with_sorted_array(Box::leak(symbols)))
+                .build();
+
+    let mut sm: StateMachine::<TypeMachine> = StateMachine::new();
+    if let Ok(v) = sm.tick(lexer.tokenizing(&mut cursor, &mut ())) {
+        match v.unwrap() {
+            CellValue::DTuple(TupleValue(v)) => {
+                if let CellValue::DInt(_) = v[1] {
+                    if let CellValue::DArray(ArrayValue(arr)) = &v[0] {
+                        if let CellValue::DCustom(_) = arr[0] {
+                            println!("success")
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+#[test]
+fn te_2() {
+    let mut symbols = Box::new(Vec::<(char, u32)>::default());
+    symbols.extend_from_slice(DEF_SYMBOLS);
+    symbols.sort_by_key(|v| v.0);
+    let mut keywords = Box::new(Vec::<(&str, u32)>::default());
+    keywords.extend_from_slice(DEF_KEYWORDS);
+    keywords.sort_by_key(|v| v.0);
+
+    let code = "ValueTuple<int, List<int>>";
+    let mut cursor = cursor::Cursor::new(code, 0, 0, None);
+    let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
+                .append(tokenizers::Number)
+                .append(tokenizers::identifier_keyword_with_sorted_array(Box::leak(keywords)))
+                .append(tokenizers::symbol_with_sorted_array(Box::leak(symbols)))
+                .build();
+
+    let mut sm: StateMachine::<TypeMachine> = StateMachine::new();
+    if let Ok(v) = sm.tick(lexer.tokenizing(&mut cursor, &mut ())) {
+        match v.unwrap() {
+            CellValue::DValueTuple(ValueTupleValue(v)) => {
+                if let CellValue::DInt(_) = v[0] {
+                    if let CellValue::DList(_) = v[1] {
+                        println!("success")
                     }
                 }
             }
