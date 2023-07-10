@@ -212,13 +212,9 @@ impl StateMachineImpl for TypeMachine {
 
             (Self::State::InList, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
              Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
-             Self::Input::UInt | Self::Input::Custom) => {
-                Some(Self::State::BasicInList)
-            }
+             Self::Input::UInt | Self::Input::Custom) => { Some(Self::State::BasicInList) }
 
-            (Self::State::BasicInList | Self::State::ArrayEnd | Self::State::ListEnd, Self::Input::RBracket) => {
-                Some(Self::State::ListEnd)
-            }
+            (Self::State::BasicInList | Self::State::ArrayEnd | Self::State::ListEnd, Self::Input::RBracket) => { Some(Self::State::ListEnd) }
             // -------------List-----------------
 
             // -------------Array-----------------
@@ -226,6 +222,10 @@ impl StateMachineImpl for TypeMachine {
             (Self::State::Basic, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
             (Self::State::ArrayBegin, Self::Input::RMidBracket) => { Some(Self::State::ArrayEnd) }
             // -------------Array-----------------
+
+            // -------------Tuple-----------------
+            (Self::State::Stop | Self::State::InList | Self::State::InTuple, Self::Input::Tuple) => { Some(Self::State::TupleBegin) }
+            // -------------Tuple-----------------
 
             // End
             (Self::State::Basic | Self::State::ListEnd | Self::State::ArrayEnd | Self::State::TupleEnd | Self::State::ValueTupleEnd, Self::Input::Empty) => { Some(Self::State::End) }
