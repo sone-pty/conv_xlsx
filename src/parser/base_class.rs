@@ -3,7 +3,6 @@ use crate::reference::RefData;
 
 use super::{CodeGenerator, DefaultData, VarData, KeyType};
 use std::collections::{HashSet, HashMap};
-use std::fs::OpenOptions;
 use std::io::{Write, Result};
 use std::rc::{Weak, Rc};
 use std::cell::RefCell;
@@ -17,7 +16,6 @@ pub struct BaseClass {
     pub required_fields: Option<Weak<RefCell<Vec<ItemStr>>>>,
     pub keytypes: Option<Weak<RefCell<KeyType>>>,
     pub refdata: Option<Arc<RefData>>,
-    pub additionals: RefCell<Vec<ItemStr>>,
     pub id_type: Rc<String>,
     pub nodefs: Weak<RefCell<HashSet<Rc<String>>>>,
     pub enumflags: Option<Weak<RefCell<HashMap<String, Vec<Rc<String>>>>>>
@@ -33,7 +31,6 @@ impl Default for BaseClass {
             required_fields: None,
             keytypes: None,
             refdata: None,
-            additionals: RefCell::from(Vec::default()),
             id_type: Rc::default(),
             nodefs: Weak::default(),
             enumflags: None
@@ -129,7 +126,13 @@ impl CodeGenerator for BaseClass {
                                             stream.write(";".as_bytes())?;
                                             stream.write(end.as_bytes())?;
                                         } else {
-                                            self.additionals.borrow_mut().push(Some(v2.clone()));
+                                            format(tab_nums + 2, stream)?;
+                                            stream.write_fmt(format_args!("public const {} ", self.id_type))?;
+                                            stream.write(v0.as_bytes())?;
+                                            stream.write(" = ".as_bytes())?;
+                                            stream.write(v.1.to_string().as_bytes())?;
+                                            stream.write(";".as_bytes())?;
+                                            stream.write(end.as_bytes())?;
                                         }
                                     }
                                 }
@@ -653,24 +656,6 @@ impl CodeGenerator for BaseClass {
                 }
             }
         }
-
-        // re-write ref.txt
-        if self.refdata.is_some() {
-            let refdata = self.refdata.as_ref().unwrap();
-            let mut file = OpenOptions::new().append(true).open(refdata.file.clone())?;
-            let mut num = refdata.max_num;
-
-            for v in self.additionals.borrow().iter() {
-                let vv = v.as_ref().unwrap();
-                file.write(vv.as_bytes())?;
-                file.write(end.as_bytes())?;
-                file.write(num.to_string().as_bytes())?;
-                num += 1;
-                file.write(end.as_bytes())?;
-            }
-            file.flush()?;
-        }
-
         Ok(())
     }
 }

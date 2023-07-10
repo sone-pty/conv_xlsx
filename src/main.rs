@@ -277,6 +277,12 @@ fn main() {
                     exit(-1)
                 }
             }
+            
+            if let Err(_) = fs::metadata(unsafe { REF_TEXT_DIR }) {
+                if let Err(_) = fs::create_dir_all(unsafe { REF_TEXT_DIR }) {
+                    exit(-1)
+                }
+            }
 
             // update svn
             if args.update_svn {
@@ -338,6 +344,10 @@ fn main() {
                 exit(-1)
             }
             if let Err(e) = fs::remove_dir_all(unsafe { OUTPUT_ENUM_CODE_DIR }) {
+                println!("{}", e);
+                exit(-1)
+            }
+            if let Err(e) = fs::remove_dir_all(unsafe { REF_TEXT_DIR }) {
                 println!("{}", e);
                 exit(-1)
             }

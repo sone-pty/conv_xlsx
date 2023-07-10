@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet, BTreeMap},
     io::{Error, ErrorKind, Result, Write},
-    rc::Rc, path::Path, fs::File, sync::Arc
+    rc::Rc, path::Path, fs::{File, OpenOptions}, sync::Arc
 };
 use std::path::PathBuf;
 use std::fs;
@@ -154,7 +154,7 @@ impl Parser {
         self.item_class.name = String::from(base_name);
         self.base_class.name = String::from(base_name);
         if refdata.is_some() {
-            self.base_class.refdata = Some(refdata.unwrap().clone());
+            self.base_class.refdata = Some(refdata.as_ref().unwrap().clone());
         }
         
         let file = ExcelFile::load_from_path(path);
@@ -171,7 +171,7 @@ impl Parser {
                             }
                         }
                     }
-                    template_table.map(|table| self.parse_template(table, base_name));
+                    template_table.map(|table| self.parse_template(table, base_name, refdata.clone()));
                 },
                 Err(e) => {
                     return Err(Error::new(ErrorKind::Other, e));
@@ -255,7 +255,7 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_template(&mut self, table: ExcelTable, base_name: &str) {
+    fn parse_template(&mut self, table: ExcelTable, base_name: &str, refdata: Option<Arc<RefData>>) {
         let width = table.width();
         let mut height = table.height();
         let ls_map: LSMap = Rc::from(RefCell::from(HashMap::with_capacity(64)));
@@ -269,6 +269,40 @@ impl Parser {
                     height = row + 1;
                     break;
                 }
+            }
+        }
+
+        #[allow(unused_must_use)]
+        // update ref.txt
+        if refdata.is_some() {
+            let refs = refdata.as_ref().unwrap();
+            let mut file = OpenOptions::new().append(true).open(refs.file.clone()).unwrap();
+            let mut num = refs.max_num;
+
+            for row in DATA_START_ROW..height {
+                if let Some(id) = table.cell(0, row) {
+                    if !refs.data.contains_key(id.as_str()) {
+                        file.write(id.as_bytes());
+                        file.write(LINE_END_FLAG.as_bytes());
+                        file.write_fmt(format_args!("{}{}", num, LINE_END_FLAG));
+                        num += 1;
+                    }
+                }
+            }
+            file.flush();
+        } else {
+            let output_path = format!("{}/{}.ref.txt", unsafe { REF_TEXT_DIR }, base_name);
+            if let Ok(mut file) = File::create(output_path) {
+                file.write_fmt(format_args!("None{}{}{}", LINE_END_FLAG, -1, LINE_END_FLAG));
+                let mut num = 0;
+
+                for row in DATA_START_ROW..height-1 {
+                    if let Some(id) = table.cell(0, row) {
+                        file.write_fmt(format_args!("{}{}{}{}", id, LINE_END_FLAG, num, LINE_END_FLAG));
+                        num += 1;
+                    }
+                }
+                file.flush();
             }
         }
 
