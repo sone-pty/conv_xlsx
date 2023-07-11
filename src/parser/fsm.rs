@@ -2,7 +2,7 @@ use std::{fmt, error::Error, collections::{HashMap, VecDeque}, sync::LazyLock};
 
 use vnlex::{token::Token, ParseError};
 
-use super::{CellValue, cell_value::{ByteValue, DoubleValue, FloatValue, IntValue, LStringValue, SByteValue, ShortValue, StringValue, UShortValue, CustomValue, UIntValue, ArrayValue, ListValue, TupleValue, BoolValue, ShortListValue, ValueTupleValue}, stack::Stack};
+use super::{CellValue, cell_value::{ByteValue, DoubleValue, FloatValue, IntValue, LStringValue, SByteValue, ShortValue, StringValue, UShortValue, CustomValue, UIntValue, ArrayValue, ListValue, TupleValue, BoolValue, ShortListValue, ValueTupleValue, EnumValue}, stack::Stack};
 
 pub trait StateMachineImpl {
     // input type
@@ -65,6 +65,7 @@ impl<T> StateMachine<T> where T: StateMachineImpl + Default {
         Self { state: T::INITIAL_STATE, impl_obj: T::default() }
     }
 
+    #[allow(dead_code)]
     pub fn state(&self) -> &T::State {
         &self.state
     }
@@ -125,11 +126,11 @@ pub enum TypeMachineState {
     ValueTupleBegin,
     InValueTuple,
     ValueTupleEnd,
-    End,
-    Skip
+    End
 }
 #[derive(PartialEq, Clone, Copy)]
 pub enum TypeMachineInput {
+    Enum,
     List,
     Byte,
     Bool,
@@ -153,6 +154,7 @@ pub enum TypeMachineInput {
     ShortList,
     Custom,
     WhiteSpace,
+    Dot,
     Empty
 }
 
@@ -175,6 +177,7 @@ impl StateMachineImpl for TypeMachine {
         LazyLock::new(|| {
             let mut table = HashMap::new();
             table.insert("List", Self::Input::List);
+            table.insert("enum", Self::Input::Enum);
             table.insert("byte", Self::Input::Byte);
             table.insert("bool", Self::Input::Bool);
             table.insert("sbyte", Self::Input::SByte);
@@ -184,7 +187,7 @@ impl StateMachineImpl for TypeMachine {
             table.insert("uint", Self::Input::UInt);
             table.insert("Lstring", Self::Input::LString);
             table.insert("LString", Self::Input::LString); 
-            table.insert("String", Self::Input::String); 
+            table.insert("string", Self::Input::String); 
             table.insert("float", Self::Input::Float); 
             table.insert("double", Self::Input::Double); 
             table.insert("Tuple", Self::Input::Tuple); 
@@ -197,6 +200,7 @@ impl StateMachineImpl for TypeMachine {
             table.insert("]", Self::Input::RMidBracket); 
             table.insert("ShortList", Self::Input::ShortList);
             table.insert(" ", Self::Input::WhiteSpace);
+            table.insert(".", Self::Input::Dot);
             table
         })
     };
@@ -207,9 +211,10 @@ impl StateMachineImpl for TypeMachine {
             // Basic
             (Self::State::Stop, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
              Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
-             Self::Input::UInt | Self::Input::Custom | Self::Input::Bool | Self::Input::ShortList) => { Some(Self::State::Basic) }
+             Self::Input::UInt | Self::Input::Custom | Self::Input::Bool | Self::Input::ShortList | Self::Input::Enum) => { Some(Self::State::Basic) }
+            (Self::State::Basic, Self::Input::Custom) => { Some(Self::State::Basic) }
             
-            // -------------List------------------
+            // -------------List------------------75
             (Self::State::Stop, Self::Input::List) => { Some(Self::State::ListBegin) }
             (Self::State::InTuple, Self::Input::List) => { self.saved.push(Self::State::InTuple); Some(Self::State::ListBegin) }
             (Self::State::InValueTuple, Self::Input::List) => { self.saved.push(Self::State::InValueTuple); Some(Self::State::ListBegin) }
@@ -219,7 +224,8 @@ impl StateMachineImpl for TypeMachine {
 
             (Self::State::InList, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
              Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
-             Self::Input::UInt | Self::Input::Custom | Self::Input::Bool | Self::Input::ShortList) => { Some(Self::State::BasicInList) }
+             Self::Input::UInt | Self::Input::Custom | Self::Input::Bool | Self::Input::ShortList | Self::Input::Enum) => { Some(Self::State::BasicInList) }
+            (Self::State::BasicInList, Self::Input::Custom) => { Some(Self::State::BasicInList) }
 
             (Self::State::BasicInList | Self::State::ArrayEnd | Self::State::ListEnd, Self::Input::RBracket) => {
                 if let Ok(v) = self.saved.pop() {
@@ -238,7 +244,7 @@ impl StateMachineImpl for TypeMachine {
             (Self::State::InTuple, Self::Input::LMidBracket) => { self.saved.push(Self::State::InTuple); Some(Self::State::ArrayBegin) }
             (Self::State::InValueTuple, Self::Input::LMidBracket) => { self.saved.push(Self::State::InValueTuple); Some(Self::State::ArrayBegin) }
             (Self::State::BasicInList, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
-            (Self::State::Basic, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
+            (Self::State::Basic | Self::State::TupleEnd | Self::State::ValueTupleEnd, Self::Input::LMidBracket) => { Some(Self::State::ArrayBegin) }
             (Self::State::ArrayBegin, Self::Input::RMidBracket) => { Some(Self::State::ArrayEnd) }
             (Self::State::ArrayEnd | Self::State::ListEnd, Self::Input::Comma) => { 
                 if let Some(v) = self.saved.peek() {
@@ -256,7 +262,7 @@ impl StateMachineImpl for TypeMachine {
             (Self::State::TupleBegin, Self::Input::LBracket) => { Some(Self::State::InTuple) }
             (Self::State::InTuple, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
              Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
-             Self::Input::UInt | Self::Input::Custom | Self::Input::Comma | Self::Input::Bool | Self::Input::ShortList) => { Some(Self::State::InTuple) }
+             Self::Input::UInt | Self::Input::Custom | Self::Input::Comma | Self::Input::Bool | Self::Input::ShortList | Self::Input::Enum) => { Some(Self::State::InTuple) }
             (Self::State::InTuple, Self::Input::RBracket) => { Some(Self::State::TupleEnd) }
             // -------------Tuple-----------------
 
@@ -265,20 +271,20 @@ impl StateMachineImpl for TypeMachine {
             (Self::State::ValueTupleBegin, Self::Input::LBracket) => { Some(Self::State::InValueTuple) }
             (Self::State::InValueTuple, Self::Input::Byte | Self::Input::Double | Self::Input::Float | Self::Input::Int | 
              Self::Input::LString | Self::Input::SByte | Self::Input::Short | Self::Input::String | Self::Input::UShort |
-             Self::Input::UInt | Self::Input::Custom | Self::Input::Comma | Self::Input::Bool | Self::Input::ShortList) => { Some(Self::State::InValueTuple) }
+             Self::Input::UInt | Self::Input::Custom | Self::Input::Comma | Self::Input::Bool | Self::Input::ShortList | Self::Input::Enum) => { Some(Self::State::InValueTuple) }
             (Self::State::InValueTuple, Self::Input::RBracket) => { Some(Self::State::ValueTupleEnd) }
             // -------------ValueTuple------------
 
             // End
             (Self::State::Basic | Self::State::ListEnd | Self::State::ArrayEnd | Self::State::TupleEnd | Self::State::ValueTupleEnd, Self::Input::Empty) => { Some(Self::State::End) }
-            (state, Self::Input::WhiteSpace) => { Some(*state) }
+            (state, Self::Input::WhiteSpace | Self::Input::Dot) => { Some(*state) }
             _ => { None }
         }
     }
 
     fn output(&mut self, bef: &Self::State, aft: &Self::State, input: &Self::Input) {
         match (bef, aft) {
-            (Self::State::Stop | Self::State::InList, Self::State::BasicInList) => {
+            (Self::State::Stop | Self::State::InList, Self::State::BasicInList) | (Self::State::Stop, Self::State::Basic) => {
                 match input {
                     Self::Input::Byte => { self.vals.push_back(CellValue::DByte(ByteValue::default())) }
                     Self::Input::Double => { self.vals.push_back(CellValue::DDouble(DoubleValue::default())) }
@@ -293,6 +299,7 @@ impl StateMachineImpl for TypeMachine {
                     Self::Input::Custom => { self.vals.push_back(CellValue::DCustom(CustomValue::default())) }
                     Self::Input::Bool => { self.vals.push_back(CellValue::DBool(BoolValue::default())) }
                     Self::Input::ShortList => { self.vals.push_back(CellValue::DShortList(ShortListValue::default())) }
+                    Self::Input::Enum => { self.vals.push_back(CellValue::DEnum(EnumValue::default())) }
                     _ => {}
                 }
             }
@@ -336,6 +343,7 @@ impl StateMachineImpl for TypeMachine {
                     Self::Input::Custom => { self.vals.push_back(CellValue::DCustom(CustomValue::default())) }
                     Self::Input::Bool => { self.vals.push_back(CellValue::DBool(BoolValue::default())) }
                     Self::Input::ShortList => { self.vals.push_back(CellValue::DShortList(ShortListValue::default())) }
+                    Self::Input::Enum => { self.vals.push_back(CellValue::DEnum(EnumValue::default())) }
                     _ => {}
                 }
             }
@@ -372,6 +380,7 @@ impl StateMachineImpl for TypeMachine {
                     Self::Input::Custom => { self.vals.push_back(CellValue::DCustom(CustomValue::default())) }
                     Self::Input::Bool => { self.vals.push_back(CellValue::DBool(BoolValue::default())) }
                     Self::Input::ShortList => { self.vals.push_back(CellValue::DShortList(ShortListValue::default())) }
+                    Self::Input::Enum => { self.vals.push_back(CellValue::DEnum(EnumValue::default())) }
                     _ => {}
                 }
             }

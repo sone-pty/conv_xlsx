@@ -1,5 +1,5 @@
 use std::{rc::Rc, io::{Write, Result}, cell::RefCell, collections::HashMap, vec};
-use vnlex::{cursor, lexer::{Lexer, self}, token::tokenizers::{self, KIND_WHITESPACE_OR_COMMENT, KIND_KEYWORD}};
+use vnlex::{cursor, lexer::{Lexer, self}, token::tokenizers};
 
 use super::{stack::Stack, LSMap, ENMap, fk_value::split_val, LSEmptyMap, fsm::{StateMachine, TypeMachine}};
 
@@ -45,6 +45,24 @@ macro_rules! write_value_to_stream {
             _ => { $stream.write("".as_bytes())?; }
         }
     };
+}
+
+struct TypeParser {
+    lexer: Lexer<(), ()>,
+    fsm: StateMachine<TypeMachine>
+}
+
+impl TypeParser {
+    fn new() -> Self {
+        Self {
+            lexer: lexer::Builder::whitespace()
+                .append(tokenizers::Number)
+                .append(tokenizers::identifier_keyword_with_sorted_array(DEF_KEYWORDS))
+                .append(tokenizers::symbol_with_sorted_array(DEF_SYMBOLS))
+                .build(),
+            fsm: StateMachine::new()
+        }
+    }
 }
 
 pub enum CellValue {
@@ -582,214 +600,16 @@ impl CellValue {
     }
 
     pub fn get_type(ty: &Rc<String>) -> Self {
-        match ty.as_str() {
-            "int" => Self::DInt(IntValue::default()),
-            "uint" => Self::DUInt(UIntValue::default()),
-            "enum" => Self::DEnum(EnumValue::default()),
-            "bool" => Self::DBool(BoolValue::default()),
-            "byte" => Self::DByte(ByteValue::default()),
-            "sbyte" => Self::DSByte(SByteValue::default()),
-            "short" => Self::DShort(ShortValue::default()),
-            "ushort" => Self::DUShort(UShortValue::default()),
-            "float" => Self::DFloat(FloatValue::default()),
-            "double" => Self::DDouble(DoubleValue::default()),
-            "string" => Self::DString(StringValue::default()),
-            "LString" | "Lstring" => Self::DLString(LStringValue::default()),
-            "ShortList" => Self::DShortList(ShortListValue::default()),
-            s if s.contains("Tuple") => {
-                let mut ch_stack = Stack::<char>::new();
-                // 0-List, 1-Tuple
-                let mut key_stack = Stack::<u8>::new();
-                let mut obj_stack = Stack::<CellValue>::new();
+        let mut parser = TypeParser::new();
+        let mut cursor = cursor::Cursor::new(ty, 0, 0, None);
 
-                for v in s.chars() {
-                    match v {
-                        '<' => {
-                            let key = Self::take_keyword(&mut ch_stack);
-                            match &key[..] {
-                                "Tuple" => {
-                                    key_stack.push(1);
-                                    obj_stack.push(Self::DTuple(TupleValue::default()));
-                                }
-                                "List" => {
-                                    key_stack.push(0);
-                                    obj_stack.push(Self::DList(ListValue::default()));
-                                }
-                                _ => {}
-                            }
-                        }
-                        // in tuple
-                        ',' => {
-                            if !ch_stack.is_empty() {
-                                if let Some(TupleValue(data)) = obj_stack.peek_mut().unwrap().get_tuple_ref_value() {
-                                    let key = Self::take_keyword(&mut ch_stack);
-                                    data.push(Self::basic_default_value(&key));
-                                }
-                            }
-                        }
-                        '>' => {
-                            if let Ok(k) = key_stack.pop() {
-                                if k == 0 {
-                                    // list
-                                    if let Some(ListValue(mut data)) = obj_stack.pop().unwrap().get_list_value() {
-                                        if !ch_stack.is_empty() {
-                                            let key = Self::take_keyword(&mut ch_stack);
-                                            data.push(Self::basic_default_value(&key));
-                                        }
-
-                                        if let Some(idx) = key_stack.peek() {
-                                            if *idx == 0 {
-                                                obj_stack.peek_mut().map(|varr| {
-                                                    if let Some(ListValue(varr)) = varr.get_list_ref_value() {
-                                                        varr.push(Self::DList(ListValue(data)));
-                                                    }
-                                                });
-                                            } else {
-                                                obj_stack.peek_mut().map(|varr| {
-                                                    if let Some(TupleValue(varr)) = varr.get_tuple_ref_value() {
-                                                        varr.push(Self::DList(ListValue(data)));
-                                                    }
-                                                });
-                                            }
-                                        } else {
-                                            obj_stack.push(Self::DList(ListValue(data)));
-                                            key_stack.push(0);
-                                        }
-                                    } else {
-                                        todo!("err")
-                                    }
-                                } else if k == 1 {
-                                    // tuple
-                                    if let Some(TupleValue(mut data)) = obj_stack.pop().unwrap().get_tuple_value() {
-                                        if !ch_stack.is_empty() {
-                                            let key = Self::take_keyword(&mut ch_stack);
-                                            data.push(Self::basic_default_value(&key));
-                                        }
-
-                                        if let Some(idx) = key_stack.peek() {
-                                            if *idx == 0 {
-                                                obj_stack.peek_mut().map(|varr| {
-                                                    if let Some(ListValue(varr)) = varr.get_list_ref_value() {
-                                                        varr.push(Self::DTuple(TupleValue(data)));
-                                                    }
-                                                });
-                                            } else {
-                                                obj_stack.peek_mut().map(|varr| {
-                                                    if let Some(TupleValue(varr)) = varr.get_tuple_ref_value() {
-                                                        varr.push(Self::DTuple(TupleValue(data)));
-                                                    }
-                                                });
-                                            }
-                                        } else {
-                                            obj_stack.push(Self::DTuple(TupleValue(data)));
-                                            key_stack.push(1);
-                                        }
-                                    } else {
-                                        todo!("err")
-                                    }
-                                }
-                            }
-                        }
-                        ']' => {
-                            if !ch_stack.is_empty() {
-                                let key = Self::take_keyword(&mut ch_stack);
-                                if let Some(idx) = key_stack.peek() {
-                                    if *idx == 0 {
-                                        if let Some(ListValue(data)) = obj_stack.peek_mut().unwrap().get_list_ref_value() {
-                                            data.push(Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)])));
-                                        }
-                                    } else {
-                                        if let Some(TupleValue(data)) = obj_stack.peek_mut().unwrap().get_tuple_ref_value() {
-                                            data.push(Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)])));
-                                        }
-                                    }
-                                } else {
-                                    obj_stack.push(Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)])));
-                                }
-                            } else if let Ok(idx) = key_stack.pop() {
-                                if idx == 1 {
-                                    if let Some(TupleValue(data)) = obj_stack.pop().unwrap().get_tuple_value() {
-                                        obj_stack.push(Self::DArray(ArrayValue(vec![Self::DTuple(TupleValue(data))])));
-                                    }
-                                }
-                            } else {
-                                todo!("err")
-                            }
-                        }
-                        // skip whitespace && '['
-                        ' ' | '[' => {}
-                        _ => { ch_stack.push(v); }
-                    }
-                }
-
-                obj_stack.pop().unwrap()
-            }
-            // array or list
-            s if s.contains("List") || s.contains("[]") => {
-                let mut char_stack: Stack<char> = Stack::new();
-                let mut op_stack: Stack<char> = Stack::new();
-                let mut keyword_stack: Stack<String> = Stack::new();
-                let mut ret = Self::DError(ErrorValue);
-
-                let take_keyword = |st: &mut Stack<char>| -> String {
-                    let mut s = String::with_capacity(10);
-                    while !st.is_empty() {
-                        if let Ok(r) = st.pop() {
-                            s.push(r)
-                        }
-                    }
-                    s.chars().rev().collect()
-                };
-
-                for c in ty.chars() {
-                    match c {
-                        ']' => {
-                            if let Ok(key) = keyword_stack.pop() {
-                                if let Ok(top) = op_stack.pop() {
-                                    if top == '[' {
-                                        ret = Self::DArray(ArrayValue(vec![Self::basic_default_value(&key)]));
-                                    }
-                                }
-                            }
-                        }
-                        '>' => {
-                            if char_stack.is_empty() {
-                                if let Ok(key) = keyword_stack.pop() {
-                                    if let Ok(top) = op_stack.pop() {
-                                        if top == '<' && key == "List" {
-                                            ret = Self::DList(ListValue(vec![ret]));
-                                        }
-                                    }
-                                }
-                            } else {
-                                let _ = op_stack.pop();
-                                let inner_keyword = take_keyword(&mut char_stack);
-                                ret = Self::basic_default_value(&inner_keyword);
-                                ret = Self::DList(ListValue(vec![ret]));
-                            }
-                        }
-                        '[' | '<' => {
-                            op_stack.push(c);
-                            keyword_stack.push(take_keyword(&mut char_stack));
-                        }
-                        c => {
-                            char_stack.push(c);
-                        }
-                    }
-                }
-                
-                if op_stack.is_empty() {
-                    ret
-                } else {
-                    // TODO: err
-                    Self::DError(ErrorValue)
-                }
-            },
-            // custom
-            s => {
-                Self::DCustom(CustomValue(Rc::from(String::from(s)), Rc::default()))
+        if let Ok(v) = parser.fsm.tick(parser.lexer.tokenizing(&mut cursor, &mut ())) {
+            if v.is_some() {
+                return v.unwrap();
             }
         }
+
+        CellValue::DError(ErrorValue::default())
     }
 
     //--------------------------------internal---------------------------------------------
@@ -1742,36 +1562,38 @@ impl ValueInfo for ValueTupleValue {
 }
 
 pub const DEF_KEYWORDS: &[(&str, u32)] = &[
-    ("byte", 1),
+    ("LString", 1),
     ("List", 2),
-    ("Tuple", 3),
-    ("ValueTuple", 4),
-    ("float", 5),
-    ("double", 6),
-    ("int", 7),
-    ("uint", 8),
-    ("LString", 9),
-    ("Lstring", 10),
-    ("String", 11),
+    ("Lstring", 3),
+    ("ShortList", 4),
+    ("Tuple", 5),
+    ("ValueTuple", 6),
+    ("byte", 7),
+    ("double", 8),
+    ("float", 9),
+    ("int", 10),
+    ("sbyte", 11),
     ("short", 12),
-    ("ushort", 13),
-    ("ShortList", 14),
+    ("string", 13),
+    ("uint", 14),
+    ("ushort", 15)
 ];
 
 pub const DEF_SYMBOLS: &[(char, u32)] = &[
     ('!', 1),
     ('#', 2),
     (',', 3),
-    (':', 4),
-    (';', 5),
-    ('<', 6),
-    ('=', 7),
-    ('>', 8),
-    ('@', 9),
-    ('^', 10),
-    ('|', 11),
-    ('[', 12),
-    (']', 13),
+    ('.', 4),
+    (':', 5),
+    (';', 6),
+    ('<', 7),
+    ('=', 8),
+    ('>', 9),
+    ('@', 10),
+    ('[', 11),
+    (']', 12),
+    ('^', 13),
+    ('|', 14)
 ];
 
 #[test]
@@ -1849,6 +1671,9 @@ fn te_2() {
     keywords.extend_from_slice(DEF_KEYWORDS);
     keywords.sort_by_key(|v| v.0);
 
+    println!("{:?}", symbols);
+    println!("{:?}", keywords);
+
     let code = "ValueTuple<int, List<int>>";
     let mut cursor = cursor::Cursor::new(code, 0, 0, None);
     let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
@@ -1868,6 +1693,34 @@ fn te_2() {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+#[test]
+fn te_3() {
+    let mut symbols = Box::new(Vec::<(char, u32)>::default());
+    symbols.extend_from_slice(DEF_SYMBOLS);
+    symbols.sort_by_key(|v| v.0);
+    let mut keywords = Box::new(Vec::<(&str, u32)>::default());
+    keywords.extend_from_slice(DEF_KEYWORDS);
+    keywords.sort_by_key(|v| v.0);
+
+    println!("{:?}", symbols);
+    println!("{:?}", keywords);
+
+    let code = "Tuple<string,short>[]";
+    let mut cursor = cursor::Cursor::new(code, 0, 0, None);
+    let lexer: Lexer<(), ()> = lexer::Builder::whitespace()
+                .append(tokenizers::Number)
+                .append(tokenizers::identifier_keyword_with_sorted_array(Box::leak(keywords)))
+                .append(tokenizers::symbol_with_sorted_array(Box::leak(symbols)))
+                .build();
+
+    let mut sm: StateMachine::<TypeMachine> = StateMachine::new();
+    if let Ok(v) = sm.tick(lexer.tokenizing(&mut cursor, &mut ())) {
+        if let CellValue::DCustom(_) = v.unwrap() {
+            println!("success")
         }
     }
 }
