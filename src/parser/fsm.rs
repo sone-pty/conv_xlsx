@@ -214,7 +214,7 @@ impl StateMachineImpl for TypeMachine {
              Self::Input::UInt | Self::Input::Custom | Self::Input::Bool | Self::Input::ShortList | Self::Input::Enum) => { Some(Self::State::Basic) }
             (Self::State::Basic, Self::Input::Custom) => { Some(Self::State::Basic) }
             
-            // -------------List------------------75
+            // -------------List------------------
             (Self::State::Stop, Self::Input::List) => { Some(Self::State::ListBegin) }
             (Self::State::InTuple, Self::Input::List) => { self.saved.push(Self::State::InTuple); Some(Self::State::ListBegin) }
             (Self::State::InValueTuple, Self::Input::List) => { self.saved.push(Self::State::InValueTuple); Some(Self::State::ListBegin) }
