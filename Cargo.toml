@@ -16,3 +16,8 @@ vnlex = { path = "../vnlex" }
 
 [profile.release]
 opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+panic = 'abort'
